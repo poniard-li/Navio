@@ -18,6 +18,8 @@ export interface DexTheme {
   appearance: 'dark' | 'light'
   radius: number
   colors: Record<DexColorKey, string>
+  fontFamily?: string
+  background?: { type: 'solid' | 'gradient'; colors: string[]; angle?: number }
 }
 export interface DexThemeCatalog {
   builtins: DexTheme[]
@@ -47,8 +49,8 @@ export function validateDexTheme(input: unknown): DexTheme {
   const value = input as Record<string, unknown>
   const fields = ['id', 'name', 'author', 'description', 'appearance', 'radius', 'colors']
   if (
-    Object.keys(value).length !== fields.length ||
-    Object.keys(value).some((key) => !fields.includes(key))
+    fields.some((key) => !(key in value)) ||
+    Object.keys(value).some((key) => ![...fields, 'fontFamily', 'background'].includes(key))
   )
     throw new Error('主题字段不完整或包含不支持的字段')
   if (typeof value.id !== 'string' || !/^[a-z][a-z0-9-]{2,47}$/.test(value.id))
@@ -82,6 +84,25 @@ export function validateDexTheme(input: unknown): DexTheme {
   for (const key of DEX_COLOR_KEYS)
     if (typeof colors[key] !== 'string' || !/^#[0-9a-f]{6}$/i.test(colors[key]))
       throw new Error(`${key} 必须使用 #RRGGBB 颜色`)
+  if (
+    value.fontFamily !== undefined &&
+    (typeof value.fontFamily !== 'string' || !/^[\p{L}\p{N} ,._-]{1,100}$/u.test(value.fontFamily))
+  )
+    throw new Error('字体名称需要 1–100 个字母、数字或常用文字，不接受 CSS 代码')
+  if (value.background !== undefined) {
+    const bg = value.background as DexTheme['background']
+    if (
+      !bg ||
+      !['solid', 'gradient'].includes(bg.type) ||
+      Object.keys(bg).some((key) => !['type', 'colors', 'angle'].includes(key)) ||
+      !Array.isArray(bg.colors) ||
+      bg.colors.length < (bg.type === 'solid' ? 1 : 2) ||
+      bg.colors.length > (bg.type === 'solid' ? 1 : 4) ||
+      bg.colors.some((c) => typeof c !== 'string' || !/^#[0-9a-f]{6}$/i.test(c)) ||
+      (bg.angle !== undefined && (!Number.isFinite(bg.angle) || bg.angle < 0 || bg.angle > 360))
+    )
+      throw new Error('背景需要安全的纯色或渐变参数')
+  }
   return structuredClone(input) as DexTheme
 }
 
@@ -189,5 +210,15 @@ export function dexThemeCss(input: unknown): string {
     '--heroui-divider-opacity: 1;',
     `color-scheme: ${theme.appearance};`
   ]
-  return `/* D.E.X ${theme.id} */\n:root, html.light, html.dark, .light, .dark {\n  ${properties.join('\n  ')}\n}\n`
+  const font = theme.fontFamily
+    ? `font-family: ${theme.fontFamily
+        .split(',')
+        .map((f) => JSON.stringify(f.trim()))
+        .join(',')}, sans-serif;`
+    : ''
+  const bg = theme.background
+  const background = bg
+    ? `background: ${bg.type === 'solid' || bg.colors.length === 1 ? bg.colors[0] : `linear-gradient(${bg.angle ?? 135}deg,${bg.colors.join(',')})`};`
+    : ''
+  return `/* D.E.X ${theme.id} */\n:root, html.light, html.dark, .light, .dark {\n  ${properties.join('\n  ')}\n}\nbody { ${font} ${background} }\n`
 }

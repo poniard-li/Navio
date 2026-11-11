@@ -52,13 +52,16 @@ const UpdaterModal: React.FC<Props> = (props) => {
             size="sm"
             className="flex app-nodrag"
             onPress={() => {
-              open(`https://github.com/mihomo-party-org/mihomo-party/releases/tag/v${version}`)
+              open('https://navio.mydex.top/#updates')
             }}
           >
             {t('common.updater.goToDownload')}
           </Button>
         </ModalHeader>
         <ModalBody className="h-full">
+          <p className="text-xs text-default-500">
+            免安装版会下载并校验更新 ZIP。完成后请退出 Navio，将新版本解压到新的文件夹再运行。
+          </p>
           <div className="markdown-body select-text">
             <ReactMarkdown
               components={{
@@ -111,7 +114,7 @@ const UpdaterModal: React.FC<Props> = (props) => {
                 }
               }}
             >
-              {t('common.updater.update')}
+              下载更新包
             </Button>
           </div>
         </ModalFooter>

@@ -4,6 +4,7 @@ import { getProfileStr, setProfileStr } from '@renderer/utils/ipc'
 import { useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { BaseEditor } from '../base/base-editor'
+import { toast } from '../base/toast'
 
 interface Props {
   id: string
@@ -13,6 +14,7 @@ interface Props {
 const EditFileModal: React.FC<Props> = (props) => {
   const { id, onClose } = props
   const [currData, setCurrData] = useState('')
+  const [saving, setSaving] = useState(false)
   const navigate = useNavigate()
   const { t } = useTranslation()
 
@@ -20,7 +22,7 @@ const EditFileModal: React.FC<Props> = (props) => {
     const loadContent = async (): Promise<void> => {
       setCurrData(await getProfileStr(id))
     }
-    loadContent()
+    void loadContent().catch((error) => toast.error(String(error)))
   }, [id])
 
   return (
@@ -38,7 +40,7 @@ const EditFileModal: React.FC<Props> = (props) => {
           <div className="flex justify-start">
             <div className="flex items-center">{t('profiles.editFile.title')}</div>
             <small className="ml-2 text-foreground-500">
-              {t('profiles.editFile.notice')}
+              远程订阅的修改会独立保存，并在更新后继续应用。也可使用
               <Button
                 size="sm"
                 color="primary"
@@ -64,9 +66,17 @@ const EditFileModal: React.FC<Props> = (props) => {
           <Button
             size="sm"
             color="primary"
+            isLoading={saving}
             onPress={async () => {
-              await setProfileStr(id, currData)
-              onClose()
+              setSaving(true)
+              try {
+                await setProfileStr(id, currData)
+                onClose()
+              } catch (error) {
+                toast.error(String(error))
+              } finally {
+                setSaving(false)
+              }
             }}
           >
             {t('common.confirm')}

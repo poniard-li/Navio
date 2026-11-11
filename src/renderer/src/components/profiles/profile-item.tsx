@@ -22,6 +22,7 @@ import EditInfoModal from './edit-info-modal'
 import EditFileModal from './edit-file-modal'
 import QrCodeModal from './qr-code-modal'
 import ProfileCardContent from './profile-card-content'
+import ProfileChangesModal from './profile-changes-modal'
 
 interface Props {
   info: IProfileItem
@@ -56,6 +57,8 @@ const ProfileItem: React.FC<Props> = (props) => {
   const [updating, setUpdating] = useState(false)
   const [openInfoEditor, setOpenInfoEditor] = useState(false)
   const [openFileEditor, setOpenFileEditor] = useState(false)
+  const [openChanges, setOpenChanges] = useState(false)
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [openRulesEditor, setOpenRulesEditor] = useState(false)
   const [openTunnelsEditor, setOpenTunnelsEditor] = useState(false)
   const [openQrCode, setOpenQrCode] = useState(false)
@@ -122,6 +125,13 @@ const ProfileItem: React.FC<Props> = (props) => {
     ]
     if (info.type === 'remote' && info.url) {
       list.unshift({
+        key: 'changes',
+        label: '本地修改与更新对照',
+        showDivider: false,
+        color: 'default',
+        className: ''
+      })
+      list.unshift({
         key: 'show-qrcode',
         label: t('profiles.qrCode.show'),
         showDivider: false,
@@ -138,13 +148,27 @@ const ProfileItem: React.FC<Props> = (props) => {
         className: ''
       } as MenuItem)
     }
-    return simpleMode
+    if (simpleMode)
+      list.push({
+        key: 'advanced',
+        label: showAdvanced ? '收起高级选项' : '展开高级选项',
+        showDivider: false,
+        color: 'default',
+        className: ''
+      })
+    return simpleMode && !showAdvanced
       ? list.filter((item) => !['edit-rules', 'edit-tunnels'].includes(item.key))
       : list
-  }, [info, t, simpleMode])
+  }, [info, t, simpleMode, showAdvanced])
 
   const onMenuAction = async (key: Key): Promise<void> => {
     switch (key) {
+      case 'changes':
+        setOpenChanges(true)
+        break
+      case 'advanced':
+        setShowAdvanced(!showAdvanced)
+        break
       case 'edit-info': {
         setOpenInfoEditor(true)
         break
@@ -238,10 +262,9 @@ const ProfileItem: React.FC<Props> = (props) => {
       }}
     >
       {openFileEditor && <EditFileModal id={info.id} onClose={() => setOpenFileEditor(false)} />}
-      {!simpleMode && openRulesEditor && (
-        <EditRulesModal id={info.id} onClose={() => setOpenRulesEditor(false)} />
-      )}
-      {!simpleMode && openTunnelsEditor && (
+      {openChanges && <ProfileChangesModal id={info.id} onClose={() => setOpenChanges(false)} />}
+      {openRulesEditor && <EditRulesModal id={info.id} onClose={() => setOpenRulesEditor(false)} />}
+      {openTunnelsEditor && (
         <EditTunnelsModal id={info.id} onClose={() => setOpenTunnelsEditor(false)} />
       )}
       {openQrCode && info.url && (

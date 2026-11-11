@@ -11,7 +11,11 @@ import LocalBackupConfig from '@renderer/components/settings/local-backup-config
 import { useTranslation } from 'react-i18next'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useNavigate } from 'react-router-dom'
-import { PRODUCT_NAME, DEVELOPER_NAME, PRODUCT_NAME_PENDING } from '../../../shared/product'
+import { version } from '@renderer/utils/init'
+import AccountConfig from '@renderer/components/settings/account-config'
+import NavioToolsConfig from '@renderer/components/settings/navio-tools-config'
+import CfwMigration from '@renderer/components/settings/cfw-migration'
+import { PRODUCT_NAME, DEVELOPER_NAME } from '../../../shared/product'
 
 const Settings: React.FC = () => {
   const { t } = useTranslation()
@@ -23,7 +27,7 @@ const Settings: React.FC = () => {
       title={t('settings.title')}
       header={
         <>
-          <span className="text-xs text-default-500 app-nodrag">由 {DEVELOPER_NAME} 开发</span>
+          <span className="text-xs text-default-500 app-nodrag">Built by {DEVELOPER_NAME}</span>
         </>
       }
     >
@@ -97,39 +101,22 @@ const Settings: React.FC = () => {
           <LocalBackupConfig />
           <WebdavConfig />
         </Tab>
+        <Tab key="account" title="账号">
+          <AccountConfig />
+        </Tab>
         <Tab key="advanced" title="高级">
+          <CfwMigration />
+          <NavioToolsConfig />
           <MihomoConfig />
         </Tab>
         <Tab key="about" title="关于">
-          <div className="m-3 rounded-xl border border-default-200 p-5">
-            <h3 className="text-lg font-semibold">{PRODUCT_NAME}</h3>
-            <p className="text-small text-default-500 mt-2 leading-relaxed">
-              由 {DEVELOPER_NAME} 开发，基于 Clash Party 客户端与 Mihomo 内核构建。 此版本为 0.4
-              功能预览版。{PRODUCT_NAME_PENDING && '产品名称待定。'}
-            </p>
-            <div className="flex flex-wrap gap-2 mt-4">
-              <Button
-                size="sm"
-                variant="flat"
-                onPress={() => window.open('https://github.com/mihomo-party-org/clash-party')}
-              >
-                客户端上游
-              </Button>
-              <Button
-                size="sm"
-                variant="flat"
-                onPress={() => window.open('https://wiki.metacubex.one/')}
-              >
-                Mihomo 文档
-              </Button>
-              <Button
-                size="sm"
-                variant="flat"
-                onPress={() => window.open('https://www.gnu.org/licenses/gpl-3.0.html')}
-              >
-                GPL-3.0 许可
-              </Button>
-            </div>
+          <div className="m-3 rounded-xl border border-default-200 px-6 py-12 text-center">
+            <h3 className="text-4xl tracking-tight font-semibold">{PRODUCT_NAME}</h3>
+            <p className="text-sm text-default-500 mt-4">{version}</p>
+            <p className="text-xs text-default-500 mt-3">Built by {DEVELOPER_NAME}</p>
+            <Button variant="light" className="mt-7" onPress={() => navigate('/credits')}>
+              鸣谢与开源许可 →
+            </Button>
           </div>
           <Actions />
         </Tab>

@@ -8,6 +8,7 @@ import { useTranslation } from 'react-i18next'
 import { isValidCron } from 'cron-validator'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
+import BaseConfirmModal from '../base/base-confirm-modal'
 import WebdavRestoreModal from './webdav-restore-modal'
 
 const WebdavConfig: React.FC = () => {
@@ -26,6 +27,7 @@ const WebdavConfig: React.FC = () => {
   const [restoring, setRestoring] = useState(false)
   const [filenames, setFilenames] = useState<string[]>([])
   const [restoreOpen, setRestoreOpen] = useState(false)
+  const [enableConfirm, setEnableConfirm] = useState(false)
 
   const [webdav, setWebdav] = useState({
     webdavUrl,
@@ -92,10 +94,35 @@ const WebdavConfig: React.FC = () => {
   }
   return (
     <>
+      <BaseConfirmModal
+        isOpen={enableConfirm}
+        title="启用第三方 WebDAV 备份？"
+        content={`备份会发送到你填写的 WebDAV 地址（${webdav.webdavUrl || '请先填写地址'}），可能包含订阅链接、节点凭据、本地规则与主题。默认使用独立备份密码加密；这不是 D.E.X 官方云同步。启用后可手动备份，并按你配置的时间执行。`}
+        onCancel={() => setEnableConfirm(false)}
+        onConfirm={async () => {
+          await patchAppConfig({ webdavEnabled: true })
+          await reinitWebdavBackupScheduler()
+          setEnableConfirm(false)
+        }}
+      />
       {restoreOpen && (
         <WebdavRestoreModal filenames={filenames} onClose={() => setRestoreOpen(false)} />
       )}
       <SettingCard title={t('webdav.title')}>
+        <SettingItem title="启用 WebDAV 备份" divider>
+          <Switch
+            size="sm"
+            aria-label="启用 WebDAV 备份"
+            isSelected={appConfig?.webdavEnabled === true}
+            onValueChange={async (value) => {
+              if (value) setEnableConfirm(true)
+              else {
+                await patchAppConfig({ webdavEnabled: false })
+                await reinitWebdavBackupScheduler()
+              }
+            }}
+          />
+        </SettingItem>
         <SettingItem title={t('webdav.url')} divider>
           <Input
             size="sm"
@@ -209,11 +236,19 @@ const WebdavConfig: React.FC = () => {
           </div>
         </SettingItem>
         <div className="flex justify-between">
-          <Button isLoading={backuping} fullWidth size="sm" className="mr-1" onPress={handleBackup}>
+          <Button
+            isDisabled={appConfig?.webdavEnabled !== true}
+            isLoading={backuping}
+            fullWidth
+            size="sm"
+            className="mr-1"
+            onPress={handleBackup}
+          >
             {t('webdav.backup')}
           </Button>
           <Button
             isLoading={restoring}
+            isDisabled={appConfig?.webdavEnabled !== true}
             fullWidth
             size="sm"
             className="ml-1"

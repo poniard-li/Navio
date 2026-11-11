@@ -1,0 +1,417 @@
+import { mkdtemp, readFile, writeFile, rm, access } from 'fs/promises'
+import { basename, dirname, join, resolve } from 'path'
+import { tmpdir } from 'os'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+
+const mocks = vi.hoisted(() => ({
+  directory: '',
+  encryptionAvailable: vi.fn(),
+  encrypt: vi.fn(),
+  decrypt: vi.fn(),
+  openExternal: vi.fn(),
+  fetch: vi.fn()
+}))
+vi.mock('electron', () => ({
+  safeStorage: {
+    isEncryptionAvailable: mocks.encryptionAvailable,
+    encryptString: mocks.encrypt,
+    decryptString: mocks.decrypt
+  },
+  shell: { openExternal: mocks.openExternal }
+}))
+vi.mock('../utils/dirs', () => ({ dataDir: () => mocks.directory }))
+
+const origin = 'https://account.mydex.top'
+const user = { id: 'account-test-user', username: 'navio_test', displayName: '账号测试' }
+const accessToken = 'opaque-token-only-for-isolated-unit-tests'
+const device = {
+  deviceCode: 'isolated-device-request',
+  userCode: 'ABCD1234',
+  verificationUri: `${origin}/account/?user_code=ABCD1234`,
+  expiresIn: 600,
+  interval: 5
+}
+const encrypted = (value: string): Buffer =>
+  Buffer.from('TEST-ENCRYPTED:' + Buffer.from(value).toString('base64'))
+const response = (data: unknown, status = 200): Response =>
+  new Response(status === 204 ? null : JSON.stringify(data), {
+    status,
+    headers: { 'Content-Type': 'application/json' }
+  })
+let account: typeof import('./dex-account')
+const vaultFile = (): string => join(mocks.directory, 'dex-account.vault')
+
+async function login(): Promise<void> {
+  mocks.fetch.mockResolvedValueOnce(response(device))
+  await account.startDexLogin()
+  mocks.fetch.mockResolvedValueOnce(response({ status: 'approved', accessToken, user }))
+  expect(await account.pollDexLogin(device.deviceCode)).toEqual({
+    status: 'complete',
+    account: { status: 'online', serverUrl: origin, user }
+  })
+}
+async function assertNoVault(): Promise<void> {
+  await expect(access(vaultFile())).rejects.toMatchObject({ code: 'ENOENT' })
+}
+
+beforeEach(async () => {
+  vi.resetModules()
+  vi.resetAllMocks()
+  vi.stubEnv('DEX_ACCOUNT_URL', '')
+  vi.stubGlobal('fetch', mocks.fetch)
+  mocks.directory = await mkdtemp(join(tmpdir(), 'navio-account-unit-'))
+  mocks.encryptionAvailable.mockReturnValue(true)
+  mocks.encrypt.mockImplementation(encrypted)
+  mocks.decrypt.mockImplementation((value: Buffer) => {
+    const text = value.toString()
+    if (!text.startsWith('TEST-ENCRYPTED:')) throw new Error('Bad encrypted fixture')
+    return Buffer.from(text.slice('TEST-ENCRYPTED:'.length), 'base64').toString()
+  })
+  mocks.openExternal.mockResolvedValue(undefined)
+  mocks.fetch.mockRejectedValue(new Error('Unexpected network request'))
+  account = await import('./dex-account')
+})
+
+afterEach(async () => {
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+  vi.unstubAllEnvs()
+  // Only remove the explicitly created temporary fixture, never an inferred project path.
+  const directory = resolve(mocks.directory)
+  if (
+    dirname(directory) !== resolve(tmpdir()) ||
+    !basename(directory).startsWith('navio-account-unit-')
+  ) {
+    throw new Error('Refusing to clean a path outside this test fixture')
+  }
+  await rm(directory, { recursive: true, force: true })
+})
+
+describe('Navio account origin boundary', () => {
+  it.each([
+    ['https://account.mydex.top/', origin],
+    ['https://ACCOUNT.MYDEX.TOP:443', origin],
+    ['http://localhost:3210', 'http://localhost:3210'],
+    ['http://127.0.0.1:3210/', 'http://127.0.0.1:3210'],
+    ['http://[::1]:3210', 'http://[::1]:3210']
+  ])('accepts complete trusted-format origins: %s', (input, expected) => {
+    expect(account.validateDexServer(input)).toBe(expected)
+  })
+
+  it.each([
+    'http://account.mydex.top',
+    'https://user:password@account.mydex.top',
+    'https://account.mydex.top/account/',
+    'https://account.mydex.top?token=abc',
+    'https://account.mydex.top/#section',
+    'file:///C:/account',
+    'javascript:alert(1)',
+    'not-a-domain',
+    'http://localhost.evil.example'
+  ])('rejects ambiguous, insecure or credential-bearing server URLs: %s', (input) => {
+    expect(() => account.validateDexServer(input)).toThrow()
+  })
+
+  it('keeps a valid environment override explicit and does not pretend an ignored change succeeded', async () => {
+    vi.stubEnv('DEX_ACCOUNT_URL', 'http://localhost:3210')
+    expect(await account.dexServerUrl()).toBe('http://localhost:3210')
+    await expect(account.setDexServerUrl('https://another.example')).rejects.toThrow('启动环境')
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    '@outside.example/api/v1/me',
+    '//outside.example/api/v1/me',
+    'https://outside.example/api/v1/me',
+    '/api/v1/../../outside',
+    '/api/v1/me#secret'
+  ])('never sends an account request outside the API boundary: %s', async (endpoint) => {
+    await expect(account.dexAccountRequest(endpoint, {}, false)).rejects.toThrow('API 路径')
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+})
+
+describe('first use and durable device login', () => {
+  it('starts signed out and never turns an unregistered offline device into a logged-in one', async () => {
+    expect(await account.getDexAccount()).toEqual({ status: 'signed-out', serverUrl: origin })
+    expect(mocks.fetch).not.toHaveBeenCalled()
+    await assertNoVault()
+  })
+
+  it('requests Navio device authorization and opens only the returned same-origin portal', async () => {
+    mocks.fetch.mockResolvedValueOnce(response(device))
+    expect(await account.startDexLogin()).toEqual(device)
+    expect(mocks.openExternal).toHaveBeenCalledWith(device.verificationUri)
+    const [url, options] = mocks.fetch.mock.calls[0]
+    expect(url).toBe(`${origin}/api/v1/device/start`)
+    expect(JSON.parse(options.body)).toMatchObject({ appId: 'navio' })
+    expect(options.redirect).toBe('error')
+    expect(new Headers(options.headers).has('Authorization')).toBe(false)
+    await assertNoVault()
+  })
+
+  it('writes the approved session through safeStorage and recovers it after module restart', async () => {
+    await login()
+    const bytes = await readFile(vaultFile())
+    expect(bytes.toString()).not.toContain(accessToken)
+    expect(mocks.encrypt).toHaveBeenCalledWith(expect.stringContaining(accessToken))
+    expect(JSON.parse(mocks.decrypt(bytes))).toEqual({ serverUrl: origin, accessToken, user })
+    vi.resetModules()
+    account = await import('./dex-account')
+    mocks.fetch.mockRejectedValueOnce(new TypeError('Network unavailable'))
+    expect(await account.getDexAccount()).toEqual({ status: 'offline', serverUrl: origin, user })
+  })
+
+  it('keeps a pending request unauthenticated and does not write a vault', async () => {
+    mocks.fetch.mockResolvedValueOnce(response(device))
+    await account.startDexLogin()
+    mocks.fetch.mockResolvedValueOnce(response({ status: 'pending' }))
+    expect(await account.pollDexLogin(device.deviceCode)).toEqual({ status: 'pending' })
+    expect(await account.getDexAccount()).toEqual({ status: 'signed-out', serverUrl: origin })
+    await assertNoVault()
+  })
+
+  it('expires unknown and elapsed device requests without sending their codes to the network', async () => {
+    expect(await account.pollDexLogin('unknown')).toEqual({ status: 'expired' })
+    mocks.fetch.mockResolvedValueOnce(response({ ...device, expiresIn: 1 }))
+    const time = Date.now()
+    vi.spyOn(Date, 'now').mockReturnValue(time)
+    await account.startDexLogin()
+    vi.mocked(Date.now).mockReturnValue(time + 1000)
+    mocks.fetch.mockClear()
+    expect(await account.pollDexLogin(device.deviceCode)).toEqual({ status: 'expired' })
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    'https://outside.example/account/',
+    'http://account.mydex.top/account/',
+    '//outside.example/account/',
+    'https://name:password@account.mydex.top/account/'
+  ])('does not open an unsafe verification return URL: %s', async (verificationUri) => {
+    mocks.fetch.mockResolvedValueOnce(response({ ...device, verificationUri }))
+    await expect(account.startDexLogin()).rejects.toThrow('来源不一致')
+    expect(mocks.openExternal).not.toHaveBeenCalled()
+    expect(await account.pollDexLogin(device.deviceCode)).toEqual({ status: 'expired' })
+  })
+
+  it.each([0, -1, '600', null])('rejects an invalid device lifetime: %s', async (expiresIn) => {
+    mocks.fetch.mockResolvedValueOnce(response({ ...device, expiresIn }))
+    await expect(account.startDexLogin()).rejects.toThrow('无效的登录请求')
+    expect(mocks.openExternal).not.toHaveBeenCalled()
+  })
+
+  it('bounds device lifetime and normalizes an invalid polling interval', async () => {
+    mocks.fetch.mockResolvedValueOnce(
+      response({ ...device, expiresIn: 10000, interval: 'invalid' })
+    )
+    expect(await account.startDexLogin()).toMatchObject({ expiresIn: 1800, interval: 5 })
+  })
+
+  it.each([403, 404, 410])('stops polling terminal server rejection %s', async (status) => {
+    mocks.fetch.mockResolvedValueOnce(response(device))
+    await account.startDexLogin()
+    mocks.fetch.mockResolvedValueOnce(
+      response({ error: { message: 'Request unavailable' } }, status)
+    )
+    expect(await account.pollDexLogin(device.deviceCode)).toEqual({ status: 'expired' })
+    mocks.fetch.mockClear()
+    expect(await account.pollDexLogin(device.deviceCode)).toEqual({ status: 'expired' })
+    expect(mocks.fetch).not.toHaveBeenCalled()
+    await assertNoVault()
+  })
+
+  it('invalidates an attempt when opening the browser fails', async () => {
+    mocks.fetch.mockResolvedValueOnce(response(device))
+    mocks.openExternal.mockRejectedValueOnce(new Error('Browser unavailable'))
+    await expect(account.startDexLogin()).rejects.toThrow('Browser unavailable')
+    expect(await account.pollDexLogin(device.deviceCode)).toEqual({ status: 'expired' })
+  })
+
+  it('refuses to claim a completed login when Windows credential encryption is unavailable', async () => {
+    mocks.fetch.mockResolvedValueOnce(response(device))
+    await account.startDexLogin()
+    mocks.encryptionAvailable.mockReturnValue(false)
+    mocks.fetch.mockResolvedValueOnce(response({ status: 'approved', accessToken, user }))
+    await expect(account.pollDexLogin(device.deviceCode)).rejects.toThrow('安全凭据存储不可用')
+    await assertNoVault()
+  })
+
+  it('requires the approved protocol status before treating a token as a completed login', async () => {
+    mocks.fetch.mockResolvedValueOnce(response(device))
+    await account.startDexLogin()
+    mocks.fetch.mockResolvedValueOnce(response({ status: 'pending', accessToken, user }))
+    expect(await account.pollDexLogin(device.deviceCode)).toEqual({ status: 'pending' })
+    await assertNoVault()
+  })
+})
+
+describe('account offline and revocation behavior', () => {
+  it('returns verified user data online and sends the opaque token only in the Authorization header', async () => {
+    await login()
+    mocks.fetch.mockClear()
+    const updated = { ...user, displayName: 'Updated profile' }
+    mocks.fetch.mockResolvedValueOnce(response({ user: updated }))
+    expect(await account.getDexAccount()).toEqual({
+      status: 'online',
+      serverUrl: origin,
+      user: updated
+    })
+    const [url, options] = mocks.fetch.mock.calls[0]
+    expect(url).toBe(`${origin}/api/v1/me`)
+    expect(url).not.toContain(accessToken)
+    expect(new Headers(options.headers).get('Authorization')).toBe(`Bearer ${accessToken}`)
+    expect(JSON.parse(mocks.decrypt(await readFile(vaultFile()))).user).toEqual(updated)
+  })
+
+  it('preserves a previously signed-in account and its encrypted vault during network loss', async () => {
+    await login()
+    const before = await readFile(vaultFile())
+    mocks.fetch.mockRejectedValueOnce(new TypeError('fetch failed'))
+    expect(await account.getDexAccount()).toEqual({ status: 'offline', serverUrl: origin, user })
+    expect(await readFile(vaultFile())).toEqual(before)
+  })
+
+  it('treats a temporary server error as offline without clearing the account', async () => {
+    await login()
+    mocks.fetch.mockResolvedValueOnce(response({ error: { message: 'Temporary failure' } }, 503))
+    expect(await account.getDexAccount()).toMatchObject({ status: 'offline', user })
+    await expect(access(vaultFile())).resolves.toBeUndefined()
+  })
+
+  it.each([401, 403])('clears a remotely revoked session on HTTP %s', async (status) => {
+    await login()
+    mocks.fetch.mockResolvedValueOnce(response({ error: { message: 'Session revoked' } }, status))
+    expect(await account.getDexAccount()).toEqual({ status: 'signed-out', serverUrl: origin })
+    await assertNoVault()
+    mocks.fetch.mockClear()
+    expect(await account.getDexAccount()).toMatchObject({ status: 'signed-out' })
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('does not treat a corrupt vault as an offline entitlement', async () => {
+    await writeFile(vaultFile(), 'not-encrypted-session-data')
+    expect(await account.getDexAccount()).toEqual({ status: 'signed-out', serverUrl: origin })
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('logs out locally even when the server is unreachable and cancels pending authorization', async () => {
+    await login()
+    mocks.fetch.mockResolvedValueOnce(response({ ...device, deviceCode: 'second-device' }))
+    await account.startDexLogin()
+    mocks.fetch.mockRejectedValueOnce(new TypeError('offline'))
+    await account.logoutDexAccount()
+    await assertNoVault()
+    expect(await account.pollDexLogin('second-device')).toEqual({ status: 'expired' })
+    expect(await account.getDexAccount()).toMatchObject({ status: 'signed-out' })
+  })
+
+  it('invalidates the old account and attempts before changing server origin', async () => {
+    await login()
+    mocks.fetch.mockResolvedValueOnce(response({ ...device, deviceCode: 'second-device' }))
+    await account.startDexLogin()
+    mocks.fetch.mockResolvedValueOnce(response({ ok: true }))
+    await account.setDexServerUrl('http://localhost:3210/')
+    expect(await account.dexServerUrl()).toBe('http://localhost:3210')
+    expect(await account.getDexAccount()).toEqual({
+      status: 'signed-out',
+      serverUrl: 'http://localhost:3210'
+    })
+    expect(await account.pollDexLogin('second-device')).toEqual({ status: 'expired' })
+    expect(mocks.fetch.mock.calls.at(-1)?.[0]).toBe(`${origin}/api/v1/auth/logout`)
+    await assertNoVault()
+  })
+
+  it('does not revive an old origin vault when a different server is configured', async () => {
+    await login()
+    await writeFile(
+      join(mocks.directory, 'dex-account-server.json'),
+      JSON.stringify({ serverUrl: 'https://another.example' })
+    )
+    mocks.fetch.mockClear()
+    expect(await account.getDexAccount()).toEqual({
+      status: 'signed-out',
+      serverUrl: 'https://another.example'
+    })
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('does not write back a late account refresh after the user logs out', async () => {
+    await login()
+    let finish!: (r: Response) => void
+    let started!: () => void
+    const ready = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve
+          started()
+        })
+    )
+    const refresh = account.getDexAccount()
+    await ready
+    mocks.fetch.mockResolvedValueOnce(response({ ok: true }))
+    await account.logoutDexAccount()
+    finish(response({ user }))
+    expect(await refresh).toMatchObject({ status: 'signed-out' })
+    await assertNoVault()
+  })
+
+  it('does not clear a replacement login when an older refresh returns unauthorized', async () => {
+    await login()
+    let finish!: (r: Response) => void
+    let started!: () => void
+    const ready = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve
+          started()
+        })
+    )
+    const refresh = account.getDexAccount()
+    await ready
+    mocks.fetch.mockResolvedValueOnce(response(device))
+    await account.startDexLogin()
+    mocks.fetch.mockResolvedValueOnce(
+      response({ status: 'approved', accessToken: 'replacement-session-token', user })
+    )
+    expect(await account.pollDexLogin(device.deviceCode)).toMatchObject({ status: 'complete' })
+    finish(response({ error: { message: 'Old session expired' } }, 401))
+    await refresh
+    expect(JSON.parse(mocks.decrypt(await readFile(vaultFile()))).accessToken).toBe(
+      'replacement-session-token'
+    )
+  })
+
+  it('ignores an approved poll arriving after the server was changed', async () => {
+    mocks.fetch.mockResolvedValueOnce(response(device))
+    await account.startDexLogin()
+    let finish!: (r: Response) => void
+    let started!: () => void
+    const ready = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve
+          started()
+        })
+    )
+    const pending = account.pollDexLogin(device.deviceCode)
+    await ready
+    await account.setDexServerUrl('http://localhost:3210')
+    finish(response({ status: 'approved', accessToken, user }))
+    expect(await pending).toEqual({ status: 'expired' })
+    await assertNoVault()
+    expect(await account.getDexAccount()).toEqual({
+      status: 'signed-out',
+      serverUrl: 'http://localhost:3210'
+    })
+  })
+})

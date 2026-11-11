@@ -47,7 +47,7 @@ import {
   getProfileStr,
   getFileStr,
   setFileStr,
-  setProfileStr,
+  saveProfileEdits,
   updateProfileItem,
   setProfileConfig,
   getOverrideConfig,
@@ -167,7 +167,7 @@ import {
   importSimpleSubscription,
   refreshSimpleSource,
   removeSimpleSource
-} from '../simple/service'
+} from '../simple/active-profile'
 import { setOperationMode } from '../simple/mode'
 import { dexThemes } from '../resolve/dex-theme'
 import { getImageDataURL } from './image'
@@ -276,6 +276,27 @@ async function setTitleBarOverlay(overlay: Electron.TitleBarOverlayOptions): Pro
 }
 
 const asyncHandlers: Record<string, AsyncFn> = {
+  previewCfwMigration: async () => (await import('../resolve/cfw-migration')).previewCfwMigration(),
+  applyCfwMigration: async (
+    planId: string,
+    selection?: import('../../shared/cfw-migration').CfwMigrationSelection
+  ) => (await import('../resolve/cfw-migration')).applyCfwMigration(planId, selection),
+  launchProxyTerminal: async () => (await import('../resolve/navio-tools')).launchProxyTerminal(),
+  runNavioTrayScript: async (id: string) =>
+    (await import('../resolve/navio-tools')).runNavioTrayScript(id),
+  getNavioScriptRuns: async () => (await import('../resolve/navio-tools')).getNavioScriptRuns(),
+  stopNavioTrayScript: async (id: string) =>
+    (await import('../resolve/navio-tools')).stopNavioTrayScript(id),
+  setBackupPassword: async (password: string) =>
+    (await import('../resolve/backup-password')).setBackupPassword(password),
+  hasBackupPassword: async () => (await import('../resolve/backup-password')).hasBackupPassword(),
+  getDexAccount: async () => (await import('../resolve/dex-account')).getDexAccount(),
+  startDexLogin: async () => (await import('../resolve/dex-account')).startDexLogin(),
+  pollDexLogin: async (code: string) => (await import('../resolve/dex-account')).pollDexLogin(code),
+  logoutDexAccount: async () => (await import('../resolve/dex-account')).logoutDexAccount(),
+  setDexServerUrl: async (url: string) =>
+    (await import('../resolve/dex-account')).setDexServerUrl(url),
+  openDexAccountPortal: async () => (await import('../resolve/dex-account')).openDexAccountPortal(),
   saveDexBypass: async (value: unknown) =>
     (await import('../resolve/dex-bypass')).saveDexBypass(value),
   // Mihomo API
@@ -321,7 +342,18 @@ const asyncHandlers: Record<string, AsyncFn> = {
   getCurrentProfileItem,
   getProfileItem,
   getProfileStr,
-  setProfileStr,
+  setProfileStr: saveProfileEdits,
+  getProfileChanges: async (id: string) =>
+    (await import('../config/profile-local')).getProfileChanges(id),
+  resolveProfileChanges: async (id: string, resolution: 'keep-local' | 'use-incoming') => {
+    const item = await getProfileItem(id)
+    if (!item) throw new Error('配置不存在')
+    const { validateProfileCandidate } = await import('../config/profile')
+    await (
+      await import('../config/profile-local')
+    ).resolveProfileChanges(id, resolution, (content) => validateProfileCandidate(item, content))
+    if ((await getProfileConfig()).current === id) await mihomoHotReloadConfig()
+  },
   addProfileItem,
   removeProfileItem,
   updateProfileItem,

@@ -22,7 +22,7 @@ import './i18n'
 let F12Count = 0
 
 if (!window.location.hash) {
-  window.history.replaceState(null, '', '#/proxies')
+  window.history.replaceState(null, '', '#/')
 }
 
 init().then(() => {

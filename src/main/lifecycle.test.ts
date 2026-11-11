@@ -31,6 +31,9 @@ vi.mock('./sys/sysproxy', () => ({
   disableSysProxySync: mocks.syncRestore
 }))
 vi.mock('./traffic/recorder', () => ({ closeTrafficUsage: mocks.closeTraffic }))
+vi.mock('./resolve/navio-tools', () => ({
+  stopAllNavioScripts: vi.fn().mockResolvedValue(undefined)
+}))
 vi.mock('./utils/dirs', () => ({ exePath: vi.fn() }))
 vi.mock('./window', () => ({ saveMainWindowState: mocks.save, showMainWindow: mocks.show }))
 function beforeQuit(event: { preventDefault: () => void }): unknown {

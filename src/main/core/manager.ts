@@ -46,7 +46,7 @@ import {
   mihomoHotReloadConfig,
   getAxios
 } from './mihomoApi'
-import { generateProfile, getRuntimeConfig } from './factory'
+import { generateProfile } from './factory'
 import { syncControlDnsAfterApply, type DnsOverrideGuardResult } from './dnsOverrideGuard'
 import { syncSmartModelToTestDir } from './smartModel'
 import {
@@ -450,7 +450,7 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
 
   const [appConfig, mihomoConfig] = await Promise.all([getAppConfig(), getControledMihomoConfig()])
 
-  let {
+  const {
     core = 'mihomo',
     autoSetDNS = true,
     diffWorkDir = false,
@@ -458,9 +458,8 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     coreStartupMode = 'log',
     testProfileOnStart = true
   } = appConfig
-  if (appConfig.operationMode === 'simple') diffWorkDir = false
 
-  let { 'log-level': logLevel = 'info' as LogLevel, tun } = mihomoConfig
+  const { 'log-level': logLevel = 'info' as LogLevel, tun } = mihomoConfig
 
   // 清理轻量模式遗留的后台核心
   await stopPidFileCore()
@@ -470,11 +469,7 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
 
   // generateProfile 返回实际使用的 current
   const { profileId: current, dnsGuard } = await generateProfile()
-  if (appConfig.operationMode === 'simple') {
-    const simpleRuntime = await getRuntimeConfig()
-    logLevel = simpleRuntime['log-level'] || 'info'
-    tun = simpleRuntime.tun
-  }
+
   const ageSecretKey = (await getProfileItem(current))?.ageSecretKey || ''
   if (testProfileOnStart) {
     await checkProfile(current, core, diffWorkDir, ageSecretKey)

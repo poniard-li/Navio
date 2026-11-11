@@ -14,34 +14,23 @@ import {
   DropdownTrigger,
   DropdownMenu,
   DropdownItem,
-  Tabs,
-  Tab,
+  Textarea,
   Tooltip
 } from '@heroui/react'
 import { toast } from '@renderer/components/base/toast'
-import React, { useEffect, useState } from 'react'
+import React, { useState } from 'react'
 import { useOverrideConfig } from '@renderer/hooks/use-override-config'
-import { useAppConfig } from '@renderer/hooks/use-app-config'
-import { useProfileConfig } from '@renderer/hooks/use-profile-config'
-import { useSWRConfig } from 'swr'
 import {
   mihomoHotReloadConfig,
   addProfileUpdater,
   getFilePath,
-  readTextFile,
-  getSimpleConfig,
-  previewSimpleConfig,
-  addProfileItem as importProfile,
-  updateProfileItem as saveProfile
+  readTextFile
 } from '@renderer/utils/ipc'
 import { MdDeleteForever, MdInfoOutline } from 'react-icons/md'
 import { FaPlus } from 'react-icons/fa6'
 import { useTranslation } from 'react-i18next'
 import { isValidCron } from 'cron-validator'
 import SettingItem from '../base/base-setting-item'
-import type { SimpleObject, SimpleSubscriptionOptions } from '../../../../shared/simple-config'
-import SimpleProviderOptions from '../simple/simple-provider-options'
-import type { HeaderRow } from '../simple/provider-fields'
 
 interface Props {
   item: IProfileItem
@@ -52,123 +41,48 @@ interface Props {
 }
 const EditInfoModal: React.FC<Props> = (props) => {
   const { item, mode = 'edit', updateProfileItem, addProfileItem, onClose } = props
-  const { appConfig } = useAppConfig()
-  const simpleMode = appConfig?.operationMode === 'simple'
-  const { mutateProfileConfig } = useProfileConfig()
-  const { mutate } = useSWRConfig()
-  const [simpleOptions, setSimpleOptions] = useState<SimpleSubscriptionOptions>({
-    mode: 'group'
-  })
-  const [providerHeaders, setProviderHeaders] = useState<HeaderRow[]>([])
-  const [outbounds, setOutbounds] = useState<string[]>(['DIRECT'])
-  const [optionsLoaded, setOptionsLoaded] = useState(false)
   const [saving, setSaving] = useState(false)
   const { overrideConfig } = useOverrideConfig()
   const { items: overrideItems = [] } = overrideConfig || {}
   const [values, setValues] = useState({
     ...item
   })
-  const inputWidth = simpleMode
-    ? 'w-[65%] min-w-0'
-    : 'w-[400px] md:w-[400px] lg:w-[600px] xl:w-[800px]'
+  const inputWidth = 'w-[65%] min-w-0'
   const { t } = useTranslation()
   const isImportMode = mode === 'import'
-  useEffect(() => {
-    if (!simpleMode || isImportMode) return
-    let active = true
-    getSimpleConfig()
-      .then((state) => {
-        if (!active) return
-        const source = state.draft.sources.find((source) => source.profileId === item.id)
-        const providerOptions = structuredClone(source?.providerOptions || {})
-        const header = (providerOptions.header || {}) as Record<string, string[]>
-        const customHeaders: HeaderRow[] = []
-        for (const [name, values] of Object.entries(header)) {
-          const lower = name.toLowerCase()
-          if (lower === 'user-agent' || lower === 'authorization') {
-            setValues((current) => ({
-              ...current,
-              [lower === 'user-agent' ? 'userAgent' : 'authToken']: values.join(' ')
-            }))
-          } else customHeaders.push({ name, values: values.join('\n') })
-        }
-        delete providerOptions.header
-        if (typeof providerOptions['age-secret-key'] === 'string')
-          setValues((current) => ({
-            ...current,
-            ageSecretKey: providerOptions['age-secret-key'] as string
-          }))
-        delete providerOptions['age-secret-key']
-        setProviderHeaders(customHeaders)
-        setSimpleOptions({
-          mode: source?.mode === 'extract' ? 'nodes' : 'group',
-          prefix: source?.prefix,
-          providerName: source?.name,
-          providerOptions
-        })
-        setOptionsLoaded(true)
-      })
-      .catch((error) => {
-        if (active) toast.error(String(error))
-      })
-    return () => {
-      active = false
-    }
-  }, [simpleMode, isImportMode, item.id])
-  useEffect(() => {
-    if (!simpleMode) return
-    let active = true
-    previewSimpleConfig()
-      .then((preview) => {
-        if (active) setOutbounds(preview.references.outbounds)
-      })
-      .catch(() => {
-        // Basic subscription edits must remain available if previewing another source fails.
-      })
-    return () => {
-      active = false
-    }
-  }, [simpleMode])
+  const [headersText, setHeadersText] = useState(
+    Object.entries(item.headers || {})
+      .map(([key, value]) => key + ': ' + value)
+      .join('\n')
+  )
   const canSave =
-    (!simpleMode || isImportMode || optionsLoaded) &&
-    (!isImportMode ||
-      (values.type === 'remote' ? Boolean(values.url?.trim()) : values.file != null))
+    !isImportMode || (values.type === 'remote' ? Boolean(values.url?.trim()) : values.file != null)
 
   const onSave = async (): Promise<void> => {
     setSaving(true)
     try {
-      const updatedItem = simpleMode
-        ? values
-        : {
-            ...values,
-            override: values.override?.filter(
-              (i) =>
-                overrideItems.find((t) => t.id === i) &&
-                !overrideItems.find((t) => t.id === i)?.global
-            )
-          }
-      if (simpleMode) {
-        const providerOptions: SimpleObject = { ...simpleOptions.providerOptions }
-        const header: Record<string, string[]> = {}
-        for (const row of providerHeaders) {
-          if (!row.name.trim() && !row.values) continue
-          const name = row.name.trim()
-          if (['user-agent', 'authorization'].includes(name.toLowerCase()))
-            throw new Error('User-Agent 和 Authorization 请在订阅信息中设置')
-          if (Object.keys(header).some((key) => key.toLowerCase() === name.toLowerCase()))
-            throw new Error('请求头名称不能重复')
-          header[name] = row.values.split('\n')
-        }
-        if (Object.keys(header).length) providerOptions.header = header
-        else delete providerOptions.header
-        const options = { ...simpleOptions, providerOptions }
-        if (isImportMode) await importProfile(updatedItem, options)
-        else {
-          await saveProfile(updatedItem, options)
-          await addProfileUpdater(updatedItem)
-        }
-        await mutate('getSimpleConfig')
-      } else if (isImportMode) {
+      const headers: Record<string, string> = {}
+      for (const line of headersText.split('\n')) {
+        if (!line.trim()) continue
+        const colon = line.indexOf(':')
+        const name = line.slice(0, colon).trim()
+        const value = line.slice(colon + 1).trim()
+        if (colon < 1 || !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(name) || /[\r\n]/.test(value))
+          throw new Error('请求头需使用“名称: 值”格式，每行一项')
+        if (['user-agent', 'authorization'].includes(name.toLowerCase()))
+          throw new Error('User-Agent 和 Authorization 请使用上方专用设置')
+        if (Object.keys(headers).some((key) => key.toLowerCase() === name.toLowerCase()))
+          throw new Error('请求头名称不能重复')
+        headers[name] = value
+      }
+      const updatedItem = {
+        ...values,
+        headers,
+        override: values.override?.filter((id) =>
+          overrideItems.some((entry) => entry.id === id && !entry.global)
+        )
+      }
+      if (isImportMode) {
         if (!addProfileItem) throw new Error('Missing profile import handler')
         await addProfileItem(updatedItem)
       } else {
@@ -181,7 +95,6 @@ const EditInfoModal: React.FC<Props> = (props) => {
     } catch (e) {
       toast.error(String(e))
     } finally {
-      if (simpleMode) mutateProfileConfig()
       setSaving(false)
     }
   }
@@ -232,39 +145,6 @@ const EditInfoModal: React.FC<Props> = (props) => {
           }}
         />
       </SettingItem>
-      {simpleMode && (
-        <>
-          <SettingItem title="导入方式">
-            <Tabs
-              size="sm"
-              aria-label="导入方式"
-              selectedKey={simpleOptions.mode}
-              onSelectionChange={(mode) => {
-                setSimpleOptions({
-                  ...simpleOptions,
-                  mode: mode as SimpleSubscriptionOptions['mode']
-                })
-              }}
-            >
-              <Tab key="group" title="整份订阅" />
-              <Tab key="nodes" title="独立节点" />
-            </Tabs>
-          </SettingItem>
-          {simpleOptions.mode === 'group' && (
-            <SettingItem title="引用名称">
-              <Input
-                size="sm"
-                className={cn(inputWidth)}
-                value={simpleOptions.providerName ?? ''}
-                placeholder={values.name}
-                onValueChange={(providerName) =>
-                  setSimpleOptions({ ...simpleOptions, providerName })
-                }
-              />
-            </SettingItem>
-          )}
-        </>
-      )}
       <SettingItem title={t('profiles.editInfo.ageSecretKey')}>
         <Input
           size="sm"
@@ -428,70 +308,68 @@ const EditInfoModal: React.FC<Props> = (props) => {
           </SettingItem>
         </>
       )}
-      {!simpleMode && (
-        <SettingItem title={t('profiles.editInfo.override.title')}>
-          <div>
-            {overrideItems
-              .filter((i) => i.global)
-              .map((i) => {
-                return (
-                  <div className="flex mb-2" key={i.id}>
-                    <Button disabled fullWidth variant="flat" size="sm">
-                      {i.name} ({t('profiles.editInfo.override.global')})
-                    </Button>
-                  </div>
-                )
-              })}
-            {values.override?.map((i) => {
-              if (!overrideItems.find((t) => t.id === i)) return null
-              if (overrideItems.find((t) => t.id === i)?.global) return null
+      <SettingItem title={t('profiles.editInfo.override.title')}>
+        <div>
+          {overrideItems
+            .filter((i) => i.global)
+            .map((i) => {
               return (
-                <div className="flex mb-2" key={i}>
+                <div className="flex mb-2" key={i.id}>
                   <Button disabled fullWidth variant="flat" size="sm">
-                    {overrideItems.find((t) => t.id === i)?.name}
-                  </Button>
-                  <Button
-                    color="warning"
-                    variant="flat"
-                    className="ml-2"
-                    size="sm"
-                    onPress={() => {
-                      setValues({
-                        ...values,
-                        override: values.override?.filter((t) => t !== i)
-                      })
-                    }}
-                  >
-                    <MdDeleteForever className="text-lg" />
+                    {i.name} ({t('profiles.editInfo.override.global')})
                   </Button>
                 </div>
               )
             })}
-            <Dropdown>
-              <DropdownTrigger>
-                <Button fullWidth size="sm" variant="flat" color="default">
-                  <FaPlus />
+          {values.override?.map((i) => {
+            if (!overrideItems.find((t) => t.id === i)) return null
+            if (overrideItems.find((t) => t.id === i)?.global) return null
+            return (
+              <div className="flex mb-2" key={i}>
+                <Button disabled fullWidth variant="flat" size="sm">
+                  {overrideItems.find((t) => t.id === i)?.name}
                 </Button>
-              </DropdownTrigger>
-              <DropdownMenu
-                emptyContent={t('profiles.editInfo.override.noAvailable')}
-                onAction={(key) => {
-                  setValues({
-                    ...values,
-                    override: Array.from(values.override || []).concat(key.toString())
-                  })
-                }}
-              >
-                {overrideItems
-                  .filter((i) => !values.override?.includes(i.id) && !i.global)
-                  .map((i) => (
-                    <DropdownItem key={i.id}>{i.name}</DropdownItem>
-                  ))}
-              </DropdownMenu>
-            </Dropdown>
-          </div>
-        </SettingItem>
-      )}
+                <Button
+                  color="warning"
+                  variant="flat"
+                  className="ml-2"
+                  size="sm"
+                  onPress={() => {
+                    setValues({
+                      ...values,
+                      override: values.override?.filter((t) => t !== i)
+                    })
+                  }}
+                >
+                  <MdDeleteForever className="text-lg" />
+                </Button>
+              </div>
+            )
+          })}
+          <Dropdown>
+            <DropdownTrigger>
+              <Button fullWidth size="sm" variant="flat" color="default">
+                <FaPlus />
+              </Button>
+            </DropdownTrigger>
+            <DropdownMenu
+              emptyContent={t('profiles.editInfo.override.noAvailable')}
+              onAction={(key) => {
+                setValues({
+                  ...values,
+                  override: Array.from(values.override || []).concat(key.toString())
+                })
+              }}
+            >
+              {overrideItems
+                .filter((i) => !values.override?.includes(i.id) && !i.global)
+                .map((i) => (
+                  <DropdownItem key={i.id}>{i.name}</DropdownItem>
+                ))}
+            </DropdownMenu>
+          </Dropdown>
+        </div>
+      </SettingItem>
     </>
   )
 
@@ -501,9 +379,7 @@ const EditInfoModal: React.FC<Props> = (props) => {
       size="5xl"
       classNames={{
         backdrop: 'top-[48px]',
-        base: simpleMode
-          ? 'w-[min(720px,calc(100vw-32px))] max-h-[min(680px,calc(100dvh-96px))]'
-          : 'w-[600px] md:w-[600px] lg:w-[800px] xl:w-[1024px]'
+        base: 'w-[min(900px,calc(100vw-32px))] max-h-[calc(100dvh-80px)]'
       }}
       hideCloseButton
       isOpen={true}
@@ -514,28 +390,24 @@ const EditInfoModal: React.FC<Props> = (props) => {
         <ModalHeader className="flex app-drag">
           {isImportMode ? t('profiles.import') : t('profiles.editInfo.title')}
         </ModalHeader>
-        <ModalBody className={simpleMode ? 'pt-0' : undefined}>
-          {simpleMode ? (
-            <SimpleProviderOptions
-              values={simpleOptions.providerOptions || {}}
-              prefix={
-                simpleOptions.prefix ?? `[${simpleOptions.providerName || values.name || '订阅'}] `
-              }
-              onPrefixChange={(prefix) => setSimpleOptions({ ...simpleOptions, prefix })}
-              remote={values.type === 'remote'}
-              group={simpleOptions.mode === 'group'}
-              outbounds={outbounds}
-              headers={providerHeaders}
-              disabled={saving || (!isImportMode && !optionsLoaded)}
-              onChange={(providerOptions) =>
-                setSimpleOptions({ ...simpleOptions, providerOptions })
-              }
-              onHeadersChange={setProviderHeaders}
-            >
-              {subscriptionFields}
-            </SimpleProviderOptions>
-          ) : (
-            subscriptionFields
+        <ModalBody>
+          {subscriptionFields}
+          {values.type === 'remote' && (
+            <details className="border-t border-default-200 pt-4 pb-3">
+              <summary className="cursor-pointer text-sm">高级 · 自定义请求头</summary>
+              <p className="text-xs text-default-500 leading-6 my-3">
+                用于订阅服务要求的额外 HTTP
+                请求头。仅发送至该订阅地址；可能含凭据，请勿分享。User-Agent 和 Authorization
+                使用上方专用设置。
+              </p>
+              <Textarea
+                aria-label="自定义订阅请求头"
+                placeholder={'X-Client: Navio\nX-Custom-Token: value'}
+                minRows={3}
+                value={headersText}
+                onValueChange={setHeadersText}
+              />
+            </details>
           )}
         </ModalBody>
         <ModalFooter>

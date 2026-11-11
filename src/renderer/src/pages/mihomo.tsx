@@ -125,6 +125,7 @@ const Mihomo: React.FC = () => {
     'log-level': logLevel = 'info',
     'find-process-mode': findProcessMode = 'strict',
     'allow-lan': allowLan,
+    'bind-address': bindAddress = '*',
     'lan-allowed-ips': lanAllowedIps = DEFAULT_MIHOMO_LAN_ALLOWED_IPS,
     'lan-disallowed-ips': lanDisallowedIps = [],
     'unified-delay': unifiedDelay,
@@ -164,6 +165,10 @@ const Mihomo: React.FC = () => {
   const [lgbmUrlInput, setLgbmUrlInput] = useState(lgbmUrl)
   const [upgrading, setUpgrading] = useState(false)
   const [lanOpen, setLanOpen] = useState(false)
+  const [bindAddressInput, setBindAddressInput] = useState(bindAddress)
+  useEffect(() => {
+    setBindAddressInput(bindAddress)
+  }, [bindAddress])
   const { isOpen, onOpen, onClose } = useDisclosure()
   const [tags, setTags] = useState<{ name: string; zipball_url: string; tarball_url: string }[]>([])
   const [loadingTags, setLoadingTags] = useState(false)
@@ -1176,6 +1181,35 @@ const Mihomo: React.FC = () => {
               }}
             />
           </SettingItem>
+          <SettingItem title="监听地址 (bind-address)" divider>
+            <div className="flex gap-2 w-[60%]">
+              <Input
+                aria-label="监听地址"
+                size="sm"
+                value={bindAddressInput}
+                placeholder="* / 127.0.0.1 / ::1"
+                onValueChange={setBindAddressInput}
+              />
+              <Button
+                size="sm"
+                isDisabled={bindAddressInput === bindAddress}
+                onPress={() => {
+                  const value = bindAddressInput.trim()
+                  if (!value || /[\s/\\?#]/.test(value)) {
+                    toast.error('请输入 * 或有效的 IPv4 / IPv6 地址，不需要端口')
+                    return
+                  }
+                  void onChangeNeedRestart({ 'bind-address': value })
+                }}
+              >
+                保存
+              </Button>
+            </div>
+          </SettingItem>
+          <p className="text-xs text-default-500 leading-6 mb-3">
+            * 监听所有网卡；127.0.0.1 或 ::1
+            仅接受本机连接。局域网访问还受上方开关、认证和防火墙影响，保存会重载内核。
+          </p>
           {allowLan && (
             <>
               <SettingItem title={t('mihomo.allowedIpSegments')}>

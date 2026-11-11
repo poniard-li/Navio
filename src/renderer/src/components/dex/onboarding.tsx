@@ -38,7 +38,7 @@ function guideSteps(simple: boolean): GuideStep[] {
       selector: '.profiles-sticky',
       side: 'bottom',
       description: simple
-        ? '<p>在这里粘贴订阅链接或导入本地文件。简易模式会把节点、分组与分流规则组合成配置。</p><p><strong>订阅链接可能包含访问凭据</strong>，请只导入可信来源，分享截图时注意遮挡。</p>'
+        ? '<p>在这里粘贴订阅链接或导入本地文件。两种界面模式共用同一套订阅与规则。</p><p><strong>订阅链接可能包含访问凭据</strong>，请只导入可信来源，分享截图时注意遮挡。</p>'
         : '<p>在这里粘贴订阅链接，或导入本地配置文件。选中配置后，再去“代理组”选择节点。</p><p><strong>订阅链接可能包含访问凭据</strong>，请只导入可信来源，分享截图时注意遮挡。</p>'
     },
     {

@@ -3,7 +3,7 @@ import { constants, existsSync } from 'fs'
 import { execFile } from 'child_process'
 import { isAbsolute, join, relative, resolve } from 'path'
 import { promisify } from 'util'
-import { randomBytes } from 'crypto'
+import { createHash, randomBytes } from 'crypto'
 import { tmpdir } from 'os'
 import { app } from 'electron'
 import i18next from 'i18next'
@@ -32,6 +32,7 @@ import { getAppConfig } from './app'
 import { getControledMihomoConfig } from './controledMihomo'
 import { getPluginItem, pluginSchedule } from './plugin'
 import { runtimeConfigWriteQueue } from './runtimeConfigQueue'
+import { applyProfileLocal, saveProfileLocal, removeProfileLocal } from './profile-local'
 
 const profileLogger = createLogger('Profile')
 const execFilePromise = promisify(execFile)
@@ -191,9 +192,8 @@ export async function changeCurrentProfile(id: string): Promise<void> {
 
 export async function updateProfileItem(
   item: IProfileItem,
-  simpleOptions?: SimpleSubscriptionOptions
+  _simpleOptions?: SimpleSubscriptionOptions
 ): Promise<void> {
-  const previous = simpleOptions ? await getProfileItem(item.id) : undefined
   await updateProfileConfig((config) => {
     const index = config.items.findIndex((i) => i.id === item.id)
     if (index === -1) {
@@ -202,27 +202,11 @@ export async function updateProfileItem(
     config.items[index] = item
     return config
   })
-  if (simpleOptions && (await getAppConfig()).operationMode === 'simple') {
-    try {
-      const { configureSimpleSubscription } = await import('../simple/service')
-      await configureSimpleSubscription(item.id, simpleOptions)
-    } catch (error) {
-      if (previous) {
-        await updateProfileItem(previous)
-        try {
-          await mihomoHotReloadConfig()
-        } catch (restoreError) {
-          profileLogger.error('Failed to restore simple subscription settings', restoreError)
-        }
-      }
-      throw error
-    }
-  }
 }
 
 export async function addProfileItem(
   item: Partial<IProfileItem>,
-  simpleOptions?: SimpleSubscriptionOptions
+  _simpleOptions?: SimpleSubscriptionOptions
 ): Promise<void> {
   const newItem = await createProfile(item)
   let shouldChangeCurrent = false
@@ -240,13 +224,6 @@ export async function addProfileItem(
     }
     return config
   })
-
-  if ((await getAppConfig()).operationMode === 'simple') {
-    const { configureSimpleSubscription } = await import('../simple/service')
-    await addProfileUpdater(newItem)
-    await configureSimpleSubscription(newItem.id, simpleOptions)
-    return
-  }
 
   // If the new profile will become the current profile, ensure generateProfile is called
   // to prepare working directory before restarting core
@@ -325,6 +302,7 @@ async function removeProfileItemSteps(id: string): Promise<IProfileItem | undefi
     if (switched) await restartCore()
     if (existsSync(profilePath(id))) await rm(profilePath(id))
     await removeProfileWorkDir(id)
+    await removeProfileLocal(id)
     await updateProfileConfig((config) => {
       removedItem = config.items?.find((i) => i.id === id)
       config.items = config.items?.filter((i) => i.id !== id)
@@ -357,6 +335,7 @@ export async function getCurrentProfileItem(): Promise<IProfileItem> {
 }
 
 interface FetchOptions {
+  headers?: Record<string, string>
   url: string
   useProxy: boolean
   mixedPort: number
@@ -426,6 +405,18 @@ async function fetchAndValidateSubscription(options: FetchOptions): Promise<Fetc
   const headers: Record<string, string> = {
     'User-Agent': userAgent,
     'Accept-Encoding': 'identity'
+  }
+  for (const [key, value] of Object.entries(options.headers || {})) {
+    if (
+      !/^[!#$%&'*+.^_`|~0-9A-Za-z-]+$/.test(key) ||
+      typeof value !== 'string' ||
+      /[\r\n\0]/.test(value) ||
+      key.length > 128 ||
+      value.length > 4096 ||
+      ['host', 'content-length', 'connection', 'transfer-encoding'].includes(key.toLowerCase())
+    )
+      throw new Error('自定义请求头格式无效，或包含受保护的传输字段')
+    headers[key] = value
   }
   if (authToken) headers['Authorization'] = authToken
 
@@ -526,6 +517,7 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
     allowFixedInterval: item.allowFixedInterval || false,
     autoUpdate: item.autoUpdate ?? true,
     authToken: item.authToken,
+    headers: item.headers,
     userAgent: item.userAgent,
     ageSecretKey: item.ageSecretKey,
     updated: new Date().getTime(),
@@ -571,6 +563,7 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
       userAgent: item.userAgent || userAgent || `mihomo.party/v${app.getVersion()} (clash.meta)`,
       ageSecretKey: newItem.ageSecretKey,
       authToken: item.authToken,
+      headers: item.headers,
       substore: newItem.substore || false
     }
 
@@ -617,7 +610,7 @@ export async function createProfile(item: Partial<IProfileItem>): Promise<IProfi
       newItem.extra = parseSubinfo(headers['subscription-userinfo'])
     }
 
-    await validateProfileCandidate(newItem, data)
+    await validateProfileCandidate(newItem, await applyProfileLocal(id, data, true))
     await setProfileStr(id, data)
     await profileLogger.info(
       `Remote profile saved id=${id} name=${newItem.name} path=${profilePath(
@@ -646,34 +639,9 @@ export async function validateProfileCandidate(
   const candidatePath = join(candidateDir, 'config.yaml')
 
   try {
-    const { core = 'mihomo', operationMode } = await getAppConfig()
+    const { core = 'mihomo' } = await getAppConfig()
     const baseProfile = await parseProfileContent(item.id, content, item.ageSecretKey)
-    if (operationMode === 'simple') {
-      const [{ compileSimpleConfig }, { resolveSimpleDraft }, { getSimpleState }] =
-        await Promise.all([
-          import('../simple/compiler'),
-          import('../simple/subscriptions'),
-          import('../simple/store')
-        ])
-      const state = await getSimpleState()
-      const draft = await resolveSimpleDraft(state.published, { item, config: baseProfile })
-      // Validate the subscription's nodes even before its first simple-mode import.
-      if (!draft.sources.some((source) => source.profileId === item.id && source.mode !== 'http')) {
-        draft.sources.push({
-          id: `candidate-${item.id}`,
-          name: `candidate-${item.id}`,
-          mode: 'inline',
-          prefix: '',
-          interval: 0,
-          proxies: (baseProfile?.proxies || []) as Record<string, unknown>[]
-        })
-      }
-      const result = compileSimpleConfig(draft, await getControledMihomoConfig())
-      if (result.errors.length) throw new Error(result.errors.join('\n'))
-      await atomicWriteFile(candidatePath, result.yaml, { encoding: 'utf8' })
-      await checkProfileConfig(candidatePath, core, undefined, opts)
-      return
-    }
+
     await generateProfile(undefined, {
       profileId: item.id,
       baseProfile,
@@ -691,42 +659,53 @@ export async function validateProfileCandidate(
 
 export async function getProfileStr(id: string | undefined): Promise<string> {
   if (existsSync(profilePath(id || 'default'))) {
-    return await readFile(profilePath(id || 'default'), 'utf-8')
+    return await applyProfileLocal(
+      id || 'default',
+      await readFile(profilePath(id || 'default'), 'utf-8')
+    )
   } else {
     return stringify(defaultProfile)
   }
 }
 
 export async function setProfileStr(id: string, content: string): Promise<void> {
-  // 读取最新的配置
-  const { current } = await getProfileConfig(true)
-  if ((await getAppConfig()).operationMode === 'simple') {
-    const { getSimpleState } = await import('../simple/store')
-    const state = await getSimpleState()
-    const linked = state.published.sources.some((source) => source.profileId === id)
-    const item = await getProfileItem(id)
-    if (linked && item) {
-      await validateProfileCandidate(item, content)
-      const previous = await getProfileStr(id)
-      await atomicWriteFile(profilePath(id), content, { encoding: 'utf8' })
-      try {
-        await mihomoHotReloadConfig()
-      } catch (error) {
-        await atomicWriteFile(profilePath(id), previous, { encoding: 'utf8' })
-        try {
-          await mihomoHotReloadConfig()
-        } catch (restoreError) {
-          profileLogger.error('Failed to restore simple subscription config', restoreError)
-        }
-        throw error
-      }
-      return
-    }
+  const isCurrent = await profileConfigWriteQueue.run(async () => {
+    const { current } = await getProfileConfig(true)
     await atomicWriteFile(profilePath(id), content, { encoding: 'utf8' })
-    return
-  }
-  await atomicWriteFile(profilePath(id), content, { encoding: 'utf8' })
-  if (current === id) await reloadCurrentProfile()
+    return current === id
+  })
+  if (isCurrent) await reloadCurrentProfile()
+}
+
+export async function saveProfileEdits(
+  id: string,
+  content: string,
+  expected?: { currentId: string; fingerprint: string }
+): Promise<void> {
+  const item = await getProfileItem(id)
+  if (!item) throw new Error('配置不存在')
+  if (item.ageSecretKey) throw new Error('加密订阅请使用独立覆写编辑，避免破坏源文件加密。')
+  await validateProfileCandidate(item, content)
+  const isCurrent = await profileConfigWriteQueue.run(async () => {
+    const { current } = await getProfileConfig(true)
+    const latestItem = await getProfileItem(id)
+    if (!latestItem) throw new Error('配置已不存在，请重新打开编辑器')
+    if (latestItem.type !== item.type || latestItem.ageSecretKey !== item.ageSecretKey)
+      throw new Error('配置来源已变化，请重新打开编辑器')
+    if (expected) {
+      const fingerprint = createHash('sha256')
+        .update(JSON.stringify(await getProfile(id)))
+        .digest('hex')
+      if (expected.currentId !== id || current !== id || fingerprint !== expected.fingerprint)
+        throw new Error('当前订阅已更新或切换，请保留编辑文本并重新载入，避免覆盖新配置。')
+    }
+    // Source refreshes and profile selection use this same queue. Validate outside it,
+    // then compare and write together; core reload must run after releasing the queue.
+    if (latestItem.type === 'remote') await saveProfileLocal(id, content)
+    else await atomicWriteFile(profilePath(id), content, { encoding: 'utf8' })
+    return current === id
+  })
+  if (isCurrent) await reloadCurrentProfile()
 }
 
 // 当前订阅的内容已替换：热加载，失败则回退到重启核心

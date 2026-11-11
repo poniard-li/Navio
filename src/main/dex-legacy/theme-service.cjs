@@ -140,6 +140,13 @@ class ThemeService {
     })
   }
 
+  async setRemote(themes, error = null) {
+    await this.ready
+    if (themes !== null) this.remote = themes.map(validateTheme)
+    this.remoteError = error
+    return this.list()
+  }
+
   async save({ theme } = {}) {
     await this.ready
     const safe = validateTheme(theme)

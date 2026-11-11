@@ -2,7 +2,7 @@ import { execFileSync } from 'child_process'
 import { existsSync, mkdtempSync, readFileSync, rmSync } from 'fs'
 import { tmpdir } from 'os'
 import { extname, join } from 'path'
-import { app, ipcMain, Menu, nativeImage, shell, systemPreferences, Tray } from 'electron'
+import { app, dialog, ipcMain, Menu, nativeImage, shell, systemPreferences, Tray } from 'electron'
 import { t } from 'i18next'
 import { PRODUCT_NAME } from '../../shared/product'
 import {
@@ -45,6 +45,7 @@ import {
 import { trayLogger } from '../utils/logger'
 import { writeClipboardText } from '../utils/clipboard'
 import { floatingWindow, triggerFloatingWindow } from './floatingWindow'
+import { launchProxyTerminal, runNavioTrayScript } from './navio-tools'
 
 export let tray: Tray | null = null
 let trayMenu: Menu | null = null
@@ -86,7 +87,9 @@ export const buildContextMenu = async (): Promise<Menu> => {
     directModeShortcut = '',
     quitWithoutCoreShortcut = '',
     restartAppShortcut = '',
-    dexBypass
+    dexBypass,
+    navioTrayScriptsEnabled = false,
+    navioTrayScripts = []
   } = await getAppConfig()
   let groupsMenu: Electron.MenuItemConstructorOptions[] = []
   if (proxyInTray && process.platform !== 'linux') {
@@ -381,6 +384,30 @@ export const buildContextMenu = async (): Promise<Menu> => {
           }
         },
     { type: 'separator' },
+    {
+      id: 'navio-proxy-terminal',
+      label: '打开代理终端',
+      enabled: process.platform === 'win32',
+      click: (): void => {
+        void launchProxyTerminal().catch((error) => dialog.showErrorBox('代理终端', String(error)))
+      }
+    },
+    ...(navioTrayScriptsEnabled && navioTrayScripts.length
+      ? [
+          {
+            id: 'navio-scripts',
+            label: '自定义脚本',
+            submenu: navioTrayScripts.map((script) => ({
+              label: script.name,
+              click: (): void => {
+                void runNavioTrayScript(script.id).catch((error) =>
+                  dialog.showErrorBox('自定义脚本', String(error))
+                )
+              }
+            }))
+          }
+        ]
+      : []),
     {
       id: 'quitWithoutCore',
       label: t('actions.lightMode.button'),

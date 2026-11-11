@@ -60,7 +60,10 @@ function plainText(value, field, max, optional = false) {
 
 /** Return a safe, independent theme object; throw ThemeValidationError on invalid input. */
 function validateTheme(input) {
-  objectWithKeys(input, THEME_KEYS, '主题')
+  const optional = ['fontFamily', 'background'].filter(
+    (key) => input && Object.prototype.hasOwnProperty.call(input, key)
+  )
+  objectWithKeys(input, [...THEME_KEYS, ...optional], '主题')
   if (typeof input.id !== 'string' || !/^[a-z][a-z0-9-]{2,47}$/.test(input.id)) {
     throw new ThemeValidationError('主题 ID 必须为 3–48 位小写字母、数字或连字符，并以字母开头')
   }
@@ -84,6 +87,29 @@ function validateTheme(input) {
     appearance: input.appearance,
     colors,
     radius: input.radius
+  }
+  if (input.fontFamily !== undefined) {
+    if (
+      typeof input.fontFamily !== 'string' ||
+      !/^[\p{L}\p{N} ,._-]{1,100}$/u.test(input.fontFamily)
+    )
+      throw new ThemeValidationError('字体名称无效')
+    result.fontFamily = input.fontFamily
+  }
+  if (input.background !== undefined) {
+    const bg = input.background
+    if (
+      !bg ||
+      !['solid', 'gradient'].includes(bg.type) ||
+      Object.keys(bg).some((key) => !['type', 'colors', 'angle'].includes(key)) ||
+      !Array.isArray(bg.colors) ||
+      bg.colors.length < (bg.type === 'solid' ? 1 : 2) ||
+      bg.colors.length > (bg.type === 'solid' ? 1 : 4) ||
+      bg.colors.some((c) => typeof c !== 'string' || !/^#[0-9a-f]{6}$/i.test(c)) ||
+      (bg.angle !== undefined && (!Number.isFinite(bg.angle) || bg.angle < 0 || bg.angle > 360))
+    )
+      throw new ThemeValidationError('背景参数无效')
+    result.background = structuredClone(bg)
   }
   if (Buffer.byteLength(JSON.stringify(result), 'utf8') > MAX_THEME_BYTES)
     throw new ThemeValidationError('主题文件过大')

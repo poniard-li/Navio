@@ -14,6 +14,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import BasePage from '@renderer/components/base/base-page'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { openDexAccountPortal } from '@renderer/utils/ipc'
 import { PRODUCT_NAME } from '../../../shared/product'
 import {
   DEX_COLOR_KEYS,
@@ -158,7 +159,6 @@ const DexThemes: React.FC = () => {
   const [serverOpen, setServerOpen] = useState(false)
   const [serverUrl, setServerUrl] = useState('')
   const [publishTheme, setPublishTheme] = useState<DexTheme | null>(null)
-  const [publishToken, setPublishToken] = useState('')
   const { appConfig, mutateAppConfig } = useAppConfig()
   const navigate = useNavigate()
   const activeId =
@@ -339,7 +339,7 @@ const DexThemes: React.FC = () => {
               setNotice(null)
             }}
           >
-            主题服务器
+            主题服务设置
           </Button>
         </div>
         {tab === 'remote' && (
@@ -459,7 +459,6 @@ const DexThemes: React.FC = () => {
                         variant="light"
                         isDisabled={busy}
                         onPress={() => {
-                          setPublishToken('')
                           setPublishTheme(theme)
                           setNotice(null)
                         }}
@@ -646,7 +645,7 @@ const DexThemes: React.FC = () => {
         hideCloseButton={busy}
       >
         <ModalContent>
-          <ModalHeader>连接你的主题服务器</ModalHeader>
+          <ModalHeader>主题服务地址</ModalHeader>
           <ModalBody>
             <p className="text-sm text-default-500">
               填写已经部署的主题服务地址。主题服务独立于代理订阅，不会接收你的节点配置。
@@ -713,7 +712,6 @@ const DexThemes: React.FC = () => {
         onOpenChange={(open) => {
           if (!open && !busy) {
             setPublishTheme(null)
-            setPublishToken('')
           }
         }}
         isDismissable={!busy}
@@ -722,23 +720,16 @@ const DexThemes: React.FC = () => {
         <ModalContent>
           <ModalHeader>发布「{publishTheme?.name}」</ModalHeader>
           <ModalBody>
+            <Button size="sm" variant="light" onPress={() => void openDexAccountPortal()}>
+              在账号门户管理作品、收藏与举报
+            </Button>
             <p className="break-all text-sm text-default-500">
               目标服务器：{catalog.serverUrl || '尚未配置，请先设置主题服务器'}
             </p>
-            <label>
-              <span className={fieldLabel}>独立的主题发布令牌</span>
-              <input
-                type="password"
-                autoComplete="off"
-                className={inputClass}
-                value={publishToken}
-                placeholder="至少 32 个字符"
-                onChange={(event) => setPublishToken(event.target.value)}
-              />
-            </label>
+
             <p className="text-xs leading-relaxed text-default-400">
-              令牌只用于本次 HTTPS
-              请求，不写入应用配置和主题文件。更新已存在的主题可能需要服务器管理员令牌。
+              使用当前 D.E.X
+              账号发布。主题通过格式检查后公开，其他用户可以举报，管理员可以下架；你的本机主题不会因此删除。
             </p>
             {notice?.error && (
               <p role="alert" className="text-sm text-danger">
@@ -752,7 +743,6 @@ const DexThemes: React.FC = () => {
               isDisabled={busy}
               onPress={() => {
                 setPublishTheme(null)
-                setPublishToken('')
               }}
             >
               取消
@@ -760,12 +750,10 @@ const DexThemes: React.FC = () => {
             <Button
               color="primary"
               isLoading={busy}
-              isDisabled={!catalog.serverUrl || publishToken.length < 32}
+              isDisabled={!catalog.serverUrl}
               onPress={() =>
                 void run(async () => {
-                  const token = publishToken
-                  setPublishToken('')
-                  await request('publish', { id: publishTheme?.id, token })
+                  await request('publish', { id: publishTheme?.id })
                   await load()
                   setPublishTheme(null)
                   setNotice({ text: '主题已发布到你的服务器' })

@@ -55,44 +55,14 @@ export async function getControledMihomoConfig(force = false): Promise<Partial<I
   }
   if (typeof controledMihomoConfig !== 'object')
     controledMihomoConfig = cloneDefaultControledMihomoConfig()
-  if ((await getAppConfig()).operationMode === 'simple') {
-    const { getSimpleState } = await import('../simple/store')
-    const state = await getSimpleState()
-    const simpleConfig: Partial<IMihomoConfig> = {}
-    try {
-      const general = parse(state.published.modules.general)
-      if (general && typeof general === 'object' && !Array.isArray(general)) {
-        Object.assign(simpleConfig, general)
-      }
-    } catch (error) {
-      controledMihomoLogger.warn('Failed to parse simple general module', error)
-    }
-    for (const key of SIMPLE_SHARED_CONFIG_KEYS) {
-      const value = controledMihomoConfig[key]
-      if (value !== undefined && !['dns', 'hosts', 'tun', 'sniffer'].includes(key)) {
-        ;(simpleConfig as Record<string, unknown>)[key] = structuredClone(value)
-      }
-    }
-    for (const module of ['dns', 'hosts', 'tun', 'sniffer'] as const) {
-      const value = controledMihomoConfig[module]
-      if (value && typeof value === 'object' && !Array.isArray(value)) {
-        ;(simpleConfig as Record<string, unknown>)[module] = structuredClone(value)
-      }
-    }
-    return simpleConfig
-  }
+  
   return controledMihomoConfig
 }
 
 export async function patchControledMihomoConfig(patch: Partial<IMihomoConfig>): Promise<void> {
   await controledMihomoWriteQueue.run(async () => {
     const appConfig = await getAppConfig()
-    if (appConfig.operationMode === 'simple') {
-      const { patchSimpleModules } = await import('../simple/service')
-      await patchSimpleModules(patch)
-      if (patch['log-level']) await startMihomoLogs()
-      return
-    }
+    
     const {
       controlDns = DEFAULT_CONTROL_DNS,
       controlSniff = DEFAULT_CONTROL_SNIFF,

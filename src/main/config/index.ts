@@ -13,6 +13,7 @@ export {
   createProfile,
   getProfileStr,
   setProfileStr,
+  saveProfileEdits,
   changeCurrentProfile,
   updateProfileItem,
   convertMrsRuleset

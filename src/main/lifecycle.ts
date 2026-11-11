@@ -8,6 +8,7 @@ import { stopCoreForExit, cleanupCoreWatcher } from './core/manager'
 import { primeAdminPrivilegesCache } from './core/admin'
 import { restoreSysProxyForExit, disableSysProxySync } from './sys/sysproxy'
 import { closeTrafficUsage } from './traffic/recorder'
+import { stopAllNavioScripts } from './resolve/navio-tools'
 import { exePath } from './utils/dirs'
 import { saveMainWindowState, showMainWindow } from './window'
 
@@ -111,7 +112,11 @@ export function setupAppLifecycle(): void {
       sysProxyDisabled = true
       cleanupCoreWatcher()
 
-      const cleanupTasks: Promise<unknown>[] = [stopCoreForExit(), closeTrafficUsage()]
+      const cleanupTasks: Promise<unknown>[] = [
+        stopCoreForExit(),
+        closeTrafficUsage(),
+        stopAllNavioScripts()
+      ]
 
       // Give core teardown enough headroom to actually kill the child. On
       // macOS releasing utun inside the kernel routinely takes 1-2s, and

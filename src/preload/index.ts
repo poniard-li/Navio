@@ -2,7 +2,23 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 // 允许的 invoke channels 白名单
 const validInvokeChannels = [
+  'previewCfwMigration',
+  'applyCfwMigration',
+  'launchProxyTerminal',
+  'runNavioTrayScript',
+  'getNavioScriptRuns',
+  'stopNavioTrayScript',
   'saveDexBypass',
+  'getProfileChanges',
+  'resolveProfileChanges',
+  'setBackupPassword',
+  'hasBackupPassword',
+  'getDexAccount',
+  'startDexLogin',
+  'pollDexLogin',
+  'logoutDexAccount',
+  'setDexServerUrl',
+  'openDexAccountPortal',
   // Mihomo API
   'mihomoVersion',
   'mihomoCloseConnection',

@@ -10,7 +10,7 @@ Navio — Windows 预览版构建说明
 源码包不包含 node_modules、extra、out；它们分别是安装依赖、运行资源和编译结果。
 
 构建准备
-1. 在 Windows 上准备 Node.js、pnpm，并将源码包解压到可写目录。
+1. 在 Windows 上准备 Node.js 24+、pnpm，并将源码包解压到可写目录。
 2. 准备用户提供的 Clash Party 便携程序解压目录。确认其中 resources/files 与 resources/sidecar 存在；Mihomo 固定版本及来源以随交付提供的实际版本/校验记录为准。
 3. 安装锁定依赖，不运行安装生命周期脚本：
 
@@ -37,11 +37,11 @@ Navio — Windows 预览版构建说明
 • DEX_USER_DATA 可指定独立验证目录，并优先于常规/便携数据路径。
 • 默认混合端口 17890、SOCKS 端口 17891、HTTP 端口 17892。
 • 首次启动选择标准/简易模式并保存，完成或跳过引导后不重复自动播放；sysProxy.enable=false、tun.enable=false、allow-lan=false。
-• 初始 autoCheckUpdate=false、silentUpdate=false；应用更新与订阅更新是不同设置。
+• 初始 autoCheckUpdate=true、silentUpdate=false；应用更新与订阅更新是不同设置。
 
 验证注意
 DEX_TEST_MODE=1 可跳过托盘、协议注册以及部分启动后台流程，便于隔离预览。代理、TUN 和权限请求本身仍走真实实现，不会伪造成功。
-建议 smoke 使用空 DEX_USER_DATA；避免外网自动任务时另设 useSubStore=false、autoUpdateProfileOnStart=false、showTraffic=false。网络信息页不会自动查询公网信息或测速。
+建议 smoke 使用空 DEX_USER_DATA；避免外网自动任务时另设 useSubStore=false、autoUpdateProfileOnStart=false、showTraffic=false。网络信息页保留原有查询行为，仅剔除坐标；隔离测试时按需替换查询目标。
 单元测试中的 OS 接口使用 mock；真实订阅、TUN、路由、系统代理与自启动仍需要在明确的目标环境验证。进程清理的定向测试与静态检查仅证明所覆盖的路径，不能作为已消除所有跨客户端影响的保证。预览不等于所有部署场景已验收。
 
 来源与再分发材料请同时阅读 DEX-THIRD-PARTY-NOTICES.txt、LICENSE，以及包内其他组件许可文件。

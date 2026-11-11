@@ -40,6 +40,7 @@ import {
 } from './lifecycle'
 import { configureAppPaths } from './utils/dirs'
 import { setTrafficUsageEnabled } from './traffic/recorder'
+import { prepareStartupConnection } from './resolve/startup-connection'
 
 const testMode = process.env.DEX_TEST_MODE === '1'
 
@@ -254,6 +255,7 @@ app
     electronApp.setAppUserModelId('studio.dex.desktop')
 
     const { appConfig, adminPromise } = await initPromise
+    await prepareStartupConnection()
     beginCoreInitialization()
 
     // 安全检查尽早并行执行，但只用一个布尔 gate 控制核心启动。
@@ -303,13 +305,6 @@ app
     const coreStartPromise = (async (): Promise<void> => {
       if (!(await startupSafetyPromise)) {
         completeCoreInitialization(false)
-        return
-      }
-
-      // 首次启动必须先由 renderer 完成模式选择，避免在选择前生成标准配置。
-      if (!appConfig.modeSelected) {
-        mainLogger.info('Core startup is waiting for the initial operation mode selection')
-        completeCoreInitialization(true)
         return
       }
 

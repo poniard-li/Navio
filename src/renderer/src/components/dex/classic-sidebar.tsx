@@ -49,7 +49,13 @@ export default function ClassicSidebar({
         <span className="dex-brand-symbol">
           <MihomoIcon size={25} />
         </span>
-        <span className="dex-brand-word">{PRODUCT_NAME}</span>
+        <button
+          className="dex-brand-word app-nodrag"
+          onClick={() => navigate('/home')}
+          title="返回概览"
+        >
+          {PRODUCT_NAME}
+        </button>
         <button
           type="button"
           className="dex-collapse app-nodrag"

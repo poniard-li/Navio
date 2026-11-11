@@ -1,6 +1,7 @@
 export const IP_INFO_ENDPOINTS = {
   'ip.sb': 'https://api.ip.sb/geoip',
-  'ipwho.is': 'https://ipwho.is/?fields=success,message,ip,country,country_code,connection',
+  'ipwho.is':
+    'https://ipwho.is/?fields=success,message,ip,country,country_code,region,city,timezone,connection',
   'ipapi.is': 'https://api.ipapi.is/'
 } as const
 
@@ -12,6 +13,9 @@ export interface NetworkIPInfo {
   ip: string
   country?: string
   countryCode?: string
+  region?: string
+  city?: string
+  timezone?: string
   asn?: number
   org?: string
   isp?: string
@@ -44,6 +48,7 @@ export function normalizeNetworkIPInfo(provider: IPInfoProvider, payload: unknow
   const connection = record(data.connection)
   const location = record(data.location)
   const asn = record(data.asn)
+  const timezone = record(data.timezone)
   const response: NetworkIPInfo = { ip }
   const country = text(provider === 'ipapi.is' ? location.country : data.country)
   const countryCode = text(provider === 'ipapi.is' ? location.country_code : data.country_code)
@@ -59,6 +64,18 @@ export function normalizeNetworkIPInfo(provider: IPInfoProvider, payload: unknow
     provider === 'ip.sb' ? data.asn : provider === 'ipwho.is' ? connection.asn : asn.asn
   )
   if (country) response.country = country
+  const region = text(provider === 'ipapi.is' ? location.state : data.region)
+  const city = text(provider === 'ipapi.is' ? location.city : data.city)
+  const zone = text(
+    provider === 'ipapi.is'
+      ? location.timezone
+      : provider === 'ipwho.is'
+        ? timezone.id
+        : data.timezone
+  )
+  if (region) response.region = region
+  if (city) response.city = city
+  if (zone) response.timezone = zone
   if (countryCode && /^[a-z]{2}$/i.test(countryCode))
     response.countryCode = countryCode.toUpperCase()
   if (org) response.org = org

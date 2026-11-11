@@ -445,7 +445,7 @@ export async function ensureRuntimeFiles(): Promise<void> {
 }
 
 export async function init(): Promise<void> {
-  const { sysProxy } = await getAppConfig()
+  const { sysProxy, autoConnect = false } = await getAppConfig()
 
   const testMode = process.env.DEX_TEST_MODE === '1'
   if (!testMode) initResumeRecovery()
@@ -456,10 +456,11 @@ export async function init(): Promise<void> {
   initTasks.push(
     (async (): Promise<void> => {
       try {
-        if (sysProxy.enable) {
+        if (testMode) return
+        if (autoConnect && sysProxy.enable) {
           await startPacServer()
         }
-        await triggerSysProxy(sysProxy.enable)
+        await triggerSysProxy(autoConnect && sysProxy.enable)
       } catch {
         // ignore
       }

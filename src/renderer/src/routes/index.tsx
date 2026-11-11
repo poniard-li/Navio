@@ -28,18 +28,15 @@ export { useDeferredRoutePreload } from './route-pages'
 
 const Help = lazy(() => import('../pages/help'))
 const Bypass = lazy(() => import('../pages/bypass'))
+const Home = lazy(() => import('../pages/home'))
+const Credits = lazy(() => import('../pages/credits'))
 
 const HomeRedirect: React.FC = () => {
   const { appConfig } = useAppConfig()
 
   if (!appConfig) return null
-  const dest =
-    appConfig.operationMode === 'simple'
-      ? 'simple'
-      : appConfig.rememberSelectedSiderCard
-        ? appConfig.lastSelectedSiderCard
-        : 'proxy'
-  if (dest === 'simple') return <Navigate to="/simple" replace />
+  const dest = appConfig.rememberSelectedSiderCard ? appConfig.lastSelectedSiderCard : undefined
+  if (!dest) return <Navigate to="/home" replace />
   return <Navigate to={getSiderCardRoute(dest)} replace />
 }
 
@@ -50,6 +47,8 @@ const ProfilesRoute: React.FC = () => {
 }
 
 const routes = [
+  { path: '/home', element: <Home /> },
+  { path: '/credits', element: <Credits /> },
   {
     path: '/help',
     element: <Help />

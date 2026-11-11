@@ -345,6 +345,14 @@ const GeneralConfig: React.FC = () => {
             }}
           />
         </SettingItem>
+        <SettingItem title="启动 Navio 后自动连接" divider>
+          <Switch
+            aria-label="启动后自动连接"
+            size="sm"
+            isSelected={appConfig?.autoConnect === true}
+            onValueChange={(value) => void patchAppConfig({ autoConnect: value })}
+          />
+        </SettingItem>
         <SettingItem title={t('settings.autoUpdateProfileOnStart')} divider>
           <Switch
             size="sm"
@@ -354,10 +362,15 @@ const GeneralConfig: React.FC = () => {
             }}
           />
         </SettingItem>
-        <SettingItem title="客户端更新" divider>
-          <span className="text-xs text-default-500">
-            预览版使用发布包升级；内核更新在内核设置中管理
-          </span>
+        <SettingItem title="自动检查 Navio 更新" divider>
+          <Switch
+            aria-label="自动检查更新，由我确认下载"
+            size="sm"
+            isSelected={appConfig?.autoCheckUpdate !== false}
+            onValueChange={(value) =>
+              void patchAppConfig({ autoCheckUpdate: value, silentUpdate: false })
+            }
+          />
         </SettingItem>
         <SettingItem title={t('settings.githubProxy')} divider>
           <Select

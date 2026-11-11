@@ -17,6 +17,7 @@ import { platform, version } from '@renderer/utils/init'
 import { useTranslation } from 'react-i18next'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
+import BaseConfirmModal from '../base/base-confirm-modal'
 
 interface SsidProfileEntry {
   ssid: string
@@ -26,6 +27,7 @@ interface SsidProfileEntry {
 const MihomoConfig: React.FC = () => {
   const { t } = useTranslation()
   const { appConfig, patchAppConfig } = useAppConfig()
+  const [gistConfirm, setGistConfirm] = useState(false)
   const { profileConfig } = useProfileConfig()
   const { items: profileItems = [] } = profileConfig || {}
   const {
@@ -205,11 +207,33 @@ const MihomoConfig: React.FC = () => {
           }}
         />
       </SettingItem>
+      <BaseConfirmModal
+        isOpen={gistConfirm}
+        title="启用 GitHub Gist 同步？"
+        content="配置将发送至你的 GitHub Gist，可能包含节点凭据和完整路由。GitHub 登录不会自动开启此功能。请先检查下面的 age 加密设置；未加密时，持有 Gist 链接的人可能读取内容。启用后配置变更会触发同步。"
+        onCancel={() => setGistConfirm(false)}
+        onConfirm={() => {
+          void patchAppConfig({ gistSyncEnabled: true })
+          setGistConfirm(false)
+        }}
+      />
+      <SettingItem title="启用 GitHub Gist 同步" divider>
+        <Switch
+          size="sm"
+          aria-label="启用 GitHub Gist 同步"
+          isSelected={appConfig?.gistSyncEnabled === true}
+          onValueChange={(value) => {
+            if (value) setGistConfirm(true)
+            else void patchAppConfig({ gistSyncEnabled: false })
+          }}
+        />
+      </SettingItem>
       <SettingItem
         title={t('mihomo.gist.title')}
         actions={
           <Button
             title={t('mihomo.gist.copyUrl')}
+            isDisabled={appConfig?.gistSyncEnabled !== true}
             isIconOnly
             size="sm"
             variant="light"

@@ -53,17 +53,54 @@ describe('network information privacy boundary', () => {
       }
     ]
   ] as const)(
-    'drops precise location and unknown fields from %s before IPC',
+    'retains the requested city and timezone but drops coordinates and unknown fields from %s before IPC',
     (provider, payload) => {
       expect(normalizeNetworkIPInfo(provider, payload)).toEqual({
         ip: '203.0.113.2',
         country: 'Example',
         countryCode: 'US',
         asn: 64500,
-        org: 'Example network'
+        org: 'Example network',
+        city: 'Private',
+        ...(provider === 'ip.sb' ? { timezone: 'Private' } : {})
       })
     }
   )
+
+  it('retains region and structured timezone from the selected providers', () => {
+    expect(
+      normalizeNetworkIPInfo('ipwho.is', {
+        ip: '203.0.113.2',
+        region: 'Example Region',
+        city: 'Example City',
+        timezone: { id: 'Asia/Shanghai' },
+        latitude: 12,
+        longitude: 34
+      })
+    ).toEqual({
+      ip: '203.0.113.2',
+      region: 'Example Region',
+      city: 'Example City',
+      timezone: 'Asia/Shanghai'
+    })
+    expect(
+      normalizeNetworkIPInfo('ipapi.is', {
+        ip: '203.0.113.2',
+        location: {
+          state: 'Example Region',
+          city: 'Example City',
+          timezone: 'Asia/Shanghai',
+          latitude: 12,
+          longitude: 34
+        }
+      })
+    ).toEqual({
+      ip: '203.0.113.2',
+      region: 'Example Region',
+      city: 'Example City',
+      timezone: 'Asia/Shanghai'
+    })
+  })
 
   it('rejects failed/malformed responses instead of presenting an empty IP as a result', () => {
     expect(() =>

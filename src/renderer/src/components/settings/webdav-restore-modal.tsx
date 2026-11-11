@@ -1,4 +1,12 @@
-import { Modal, ModalContent, ModalHeader, ModalBody, ModalFooter, Button } from '@heroui/react'
+import {
+  Modal,
+  ModalContent,
+  ModalHeader,
+  ModalBody,
+  ModalFooter,
+  Button,
+  Input
+} from '@heroui/react'
 import { toast } from '@renderer/components/base/toast'
 import { relaunchApp, webdavDelete, webdavRestore } from '@renderer/utils/ipc'
 import React, { useState } from 'react'
@@ -15,6 +23,7 @@ const WebdavRestoreModal: React.FC<Props> = (props) => {
   const { filenames: names, onClose } = props
   const [filenames, setFilenames] = useState<string[]>(names)
   const [restoring, setRestoring] = useState(false)
+  const [password, setPassword] = useState('')
 
   return (
     <Modal
@@ -28,6 +37,13 @@ const WebdavRestoreModal: React.FC<Props> = (props) => {
       <ModalContent>
         <ModalHeader className="flex app-drag">{t('webdav.restore.title')}</ModalHeader>
         <ModalBody>
+          <Input
+            type="password"
+            label="备份密码"
+            description="加密备份需填写创建时的独立密码；明文备份可留空。"
+            value={password}
+            onValueChange={setPassword}
+          />
           {filenames.length === 0 ? (
             <div className="flex justify-center">{t('webdav.restore.noBackups')}</div>
           ) : (
@@ -44,7 +60,7 @@ const WebdavRestoreModal: React.FC<Props> = (props) => {
                     onPress={async () => {
                       setRestoring(true)
                       try {
-                        await webdavRestore(filename)
+                        await webdavRestore(filename, password || undefined)
                         await relaunchApp()
                       } catch (e) {
                         toast.error(t('common.error.restoreFailed', { error: e }))

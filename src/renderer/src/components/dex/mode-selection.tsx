@@ -77,7 +77,7 @@ export default function ModeSelection({
                   <span id={`operation-mode-${mode}-description`} className="dex-setup-choice-copy">
                     {standard
                       ? '沿用订阅或本地配置中的节点和规则，完整掌握每项设置。'
-                      : '集中管理节点、分组与分流规则，由应用组合配置。优先呈现日常功能。'}
+                      : '保留同一套订阅与规则，收起高级选项，随时可以展开。'}
                   </span>
                   <span className="dex-setup-choice-note">
                     {standard
@@ -92,10 +92,10 @@ export default function ModeSelection({
             })}
           </div>
           <div className="dex-setup-notes">
-            <p>两种模式采用不同的配置组织方式。切换至简易模式时会带入订阅；DNS、TUN 等设置共用。</p>
+            <p>两种模式使用同一套订阅、节点与规则。切换只改变界面展示，不改变连接和路由。</p>
             <p>选择模式不会开启系统代理或 TUN。初次选择后，会带你认识常用操作。</p>
           </div>
-          <span className="dex-setup-credit">由 {DEVELOPER_NAME} 开发</span>
+          <span className="dex-setup-credit">Built by {DEVELOPER_NAME}</span>
         </ModalBody>
       </ModalContent>
     </Modal>

@@ -469,7 +469,7 @@ export const mihomoHotReloadConfig = async (): Promise<void> => {
   await manageSmartOverride()
   const { profileId: current, dnsGuard } = await generateProfile()
   const appConfig = await getAppConfig()
-  const diffWorkDir = appConfig.operationMode === 'simple' ? false : appConfig.diffWorkDir === true
+  const diffWorkDir = appConfig.diffWorkDir === true
   const configPath = diffWorkDir ? mihomoWorkConfigPath(current) : mihomoWorkConfigPath('work')
   mihomoApiLogger.info(`hot reload config path: ${configPath}`)
   const instance = await getAxios()

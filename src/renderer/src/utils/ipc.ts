@@ -104,7 +104,9 @@ interface IpcApi {
   getRuntimeConfigStr: () => Promise<string>
   getRuleStr: (id: string) => Promise<string>
   setRuleStr: (id: string, str: string) => Promise<void>
-  getSimpleConfig: () => Promise<import('../../../shared/simple-config').SimpleState>
+  getSimpleConfig: () => Promise<
+    import('../../../shared/simple-config').SimpleState & { draftWarning?: string }
+  >
   getSimpleNode: (name?: string) => Promise<import('../../../shared/simple-config').SimpleObject>
   createSimpleNodes: (
     values: import('../../../shared/simple-config').SimpleObject[]
@@ -210,12 +212,12 @@ interface IpcApi {
   clearMihomoVersionCache: () => Promise<void>
   // Backup
   webdavBackup: () => Promise<boolean>
-  webdavRestore: (filename: string) => Promise<void>
+  webdavRestore: (filename: string, password?: string) => Promise<void>
   listWebdavBackups: () => Promise<string[]>
   webdavDelete: (filename: string) => Promise<void>
   reinitWebdavBackupScheduler: () => Promise<void>
   exportLocalBackup: () => Promise<boolean>
-  importLocalBackup: () => Promise<boolean>
+  importLocalBackup: (password?: string) => Promise<boolean>
   // SubStore
   startSubStoreFrontendServer: () => Promise<void>
   stopSubStoreFrontendServer: () => Promise<void>
@@ -513,3 +515,76 @@ export function updateTrayIconImmediate(sysProxyEnabled: boolean, tunEnabled: bo
 export function getAppInfo(metadata: IMihomoConnectionDetail['metadata']): Promise<IAppInfo> {
   return invoke<IAppInfo>('getAppInfo', metadata)
 }
+
+export interface DexAccount {
+  status: 'signed-out' | 'online' | 'offline'
+  user?: { id: string; username: string; displayName: string; email?: string; phone?: string }
+  serverUrl: string
+}
+export interface DexDeviceLogin {
+  deviceCode: string
+  userCode: string
+  verificationUri: string
+  expiresIn: number
+  interval: number
+}
+export const getDexAccount = (): Promise<DexAccount> => invoke('getDexAccount')
+export const startDexLogin = (): Promise<DexDeviceLogin> => invoke('startDexLogin')
+export const pollDexLogin = (
+  deviceCode: string
+): Promise<{ status: 'pending' | 'complete' | 'expired'; account?: DexAccount }> =>
+  invoke('pollDexLogin', deviceCode)
+export const logoutDexAccount = (): Promise<void> => invoke('logoutDexAccount')
+export const setDexServerUrl = (url: string): Promise<void> => invoke('setDexServerUrl', url)
+export const openDexAccountPortal = (): Promise<void> => invoke('openDexAccountPortal')
+export const setBackupPassword = (password: string): Promise<void> =>
+  invoke('setBackupPassword', password)
+export const hasBackupPassword = (): Promise<boolean> => invoke('hasBackupPassword')
+export interface ProfileChanges {
+  base: string
+  local: string
+  incoming: string
+  conflicts: string[]
+  hasChanges: boolean
+  hasPending: boolean
+}
+export const getProfileChanges = (id: string): Promise<ProfileChanges> =>
+  invoke('getProfileChanges', id)
+export const resolveProfileChanges = (
+  id: string,
+  choice: 'keep-local' | 'use-incoming'
+): Promise<void> => invoke('resolveProfileChanges', id, choice)
+
+export const launchProxyTerminal = (): Promise<void> => invoke('launchProxyTerminal')
+export const runNavioTrayScript = (id: string): Promise<void> => invoke('runNavioTrayScript', id)
+export const stopNavioTrayScript = (id: string): Promise<void> => invoke('stopNavioTrayScript', id)
+export const getNavioScriptRuns = (): Promise<INavioScriptRun[]> => invoke('getNavioScriptRuns')
+export interface CfwMigrationPlan {
+  planId: string
+  sourceDirectory: string
+  expiresAt: number | string
+  candidates: {
+    id: string
+    name: string
+    kind: 'local' | 'remote'
+    sourceFile: string
+    sourceHost?: string
+    nodeCount: number
+    groupCount: number
+    ruleCount: number
+    warnings: string[]
+  }[]
+  overrides: { id: string; name: string; sourceFile: string; keys: string[] }[]
+  warnings: string[]
+  unsupportedScripts: { source: string; kind: string; message: string }[]
+}
+export const previewCfwMigration = (): Promise<CfwMigrationPlan | null> =>
+  invoke('previewCfwMigration')
+export const applyCfwMigration = (
+  planId: string,
+  selection?: { profileIds?: string[]; overrideIds?: string[] }
+): Promise<{
+  importedProfiles: { id: string; name: string }[]
+  importedOverrides: { id: string; name: string }[]
+  warnings: string[]
+}> => invoke('applyCfwMigration', planId, selection)

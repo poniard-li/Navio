@@ -19,6 +19,7 @@ import DexSidebar from './components/dex/sidebar'
 import ClassicSidebar from './components/dex/classic-sidebar'
 import ModeSelection from './components/dex/mode-selection'
 import DexOnboarding from './components/dex/onboarding'
+import AccountGate from './components/dex/account-gate'
 import { getSiderCardByPath } from './utils/sider'
 import { markInitialContentPartReady } from './utils/startup'
 
@@ -119,95 +120,97 @@ const App: React.FC = () => {
   }, [customTheme, setTitlebar])
 
   return (
-    <div
-      className="dex-shell"
-      data-collapsed={collapsed}
-      data-animations={!disableAnimations}
-      data-platform={platform}
-      data-frameless={!useWindowFrame}
-      style={{ '--dex-sidebar-width': `${collapsed ? 68 : sidebarWidth}px` } as CSSProperties}
-    >
-      {appConfig?.dexNavigation === 'classic' ? (
-        <ClassicSidebar
-          collapsed={collapsed}
-          onCollapsedChange={setSidebarCollapsed}
-          onOpenMode={() => setShowModeSelection(true)}
-        />
-      ) : (
-        <DexSidebar
-          collapsed={collapsed}
-          onCollapsedChange={setSidebarCollapsed}
-          onOpenMode={() => setShowModeSelection(true)}
-        />
-      )}
-      {!collapsed && (
-        <div
-          className="dex-sidebar-resizer"
-          role="separator"
-          aria-label="调整导航栏宽度"
-          aria-orientation="vertical"
-          aria-valuenow={sidebarWidth}
-          aria-valuemin={220}
-          aria-valuemax={320}
-          tabIndex={0}
-          onPointerDown={(event) => {
-            resizeRef.current = true
-            widthRef.current = sidebarWidth
-            event.currentTarget.setPointerCapture(event.pointerId)
-          }}
-          onPointerMove={(event) => {
-            if (!resizeRef.current) return
-            const next = Math.min(320, Math.max(220, event.clientX))
-            widthRef.current = next
-            setSidebarWidth(next)
-          }}
-          onPointerUp={(event) => {
-            if (!resizeRef.current) return
-            resizeRef.current = false
-            event.currentTarget.releasePointerCapture(event.pointerId)
-            void patchAppConfig({ siderWidth: widthRef.current })
-          }}
-          onPointerCancel={() => {
-            resizeRef.current = false
-          }}
-          onKeyDown={(event) => {
-            if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
-            event.preventDefault()
-            const next = Math.min(
-              320,
-              Math.max(220, sidebarWidth + (event.key === 'ArrowLeft' ? -10 : 10))
-            )
-            setSidebarWidth(next)
-            void patchAppConfig({ siderWidth: next })
-          }}
-        />
-      )}
-      <main className="main dex-main" id="dex-main-content">
-        <Suspense
-          fallback={
-            <div className="dex-page-loading" role="status">
-              <span />
-              正在载入…
-            </div>
-          }
-        >
-          {page}
-          <FirstContentReady />
-        </Suspense>
-      </main>
-      {appConfig && (!appConfig.modeSelected || showModeSelection) && (
-        <ModeSelection
-          canDismiss={Boolean(appConfig.modeSelected)}
-          currentMode={appConfig.operationMode}
-          onClose={() => setShowModeSelection(false)}
-          onSelect={async (mode) => {
-            await setOperationMode(mode)
-            navigate(mode === 'simple' ? '/simple' : '/profiles')
-          }}
-        />
-      )}
-      <DexOnboarding blocked={!appConfig?.modeSelected || showModeSelection} />
-    </div>
+    <AccountGate>
+      <div
+        className="dex-shell"
+        data-collapsed={collapsed}
+        data-animations={!disableAnimations}
+        data-platform={platform}
+        data-frameless={!useWindowFrame}
+        style={{ '--dex-sidebar-width': `${collapsed ? 68 : sidebarWidth}px` } as CSSProperties}
+      >
+        {appConfig?.dexNavigation === 'classic' ? (
+          <ClassicSidebar
+            collapsed={collapsed}
+            onCollapsedChange={setSidebarCollapsed}
+            onOpenMode={() => setShowModeSelection(true)}
+          />
+        ) : (
+          <DexSidebar
+            collapsed={collapsed}
+            onCollapsedChange={setSidebarCollapsed}
+            onOpenMode={() => setShowModeSelection(true)}
+          />
+        )}
+        {!collapsed && (
+          <div
+            className="dex-sidebar-resizer"
+            role="separator"
+            aria-label="调整导航栏宽度"
+            aria-orientation="vertical"
+            aria-valuenow={sidebarWidth}
+            aria-valuemin={220}
+            aria-valuemax={320}
+            tabIndex={0}
+            onPointerDown={(event) => {
+              resizeRef.current = true
+              widthRef.current = sidebarWidth
+              event.currentTarget.setPointerCapture(event.pointerId)
+            }}
+            onPointerMove={(event) => {
+              if (!resizeRef.current) return
+              const next = Math.min(320, Math.max(220, event.clientX))
+              widthRef.current = next
+              setSidebarWidth(next)
+            }}
+            onPointerUp={(event) => {
+              if (!resizeRef.current) return
+              resizeRef.current = false
+              event.currentTarget.releasePointerCapture(event.pointerId)
+              void patchAppConfig({ siderWidth: widthRef.current })
+            }}
+            onPointerCancel={() => {
+              resizeRef.current = false
+            }}
+            onKeyDown={(event) => {
+              if (event.key !== 'ArrowLeft' && event.key !== 'ArrowRight') return
+              event.preventDefault()
+              const next = Math.min(
+                320,
+                Math.max(220, sidebarWidth + (event.key === 'ArrowLeft' ? -10 : 10))
+              )
+              setSidebarWidth(next)
+              void patchAppConfig({ siderWidth: next })
+            }}
+          />
+        )}
+        <main className="main dex-main" id="dex-main-content">
+          <Suspense
+            fallback={
+              <div className="dex-page-loading" role="status">
+                <span />
+                正在载入…
+              </div>
+            }
+          >
+            {page}
+            <FirstContentReady />
+          </Suspense>
+        </main>
+        {appConfig && (!appConfig.modeSelected || showModeSelection) && (
+          <ModeSelection
+            canDismiss={Boolean(appConfig.modeSelected)}
+            currentMode={appConfig.operationMode}
+            onClose={() => setShowModeSelection(false)}
+            onSelect={async (mode) => {
+              await setOperationMode(mode)
+              navigate('/home')
+            }}
+          />
+        )}
+        <DexOnboarding blocked={!appConfig?.modeSelected || showModeSelection} />
+      </div>
+    </AccountGate>
   )
 }
 

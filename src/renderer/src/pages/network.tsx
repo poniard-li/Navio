@@ -214,7 +214,7 @@ const IPPage: React.FC = () => {
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [hidden, setHidden] = useState(true)
+  const [hidden, setHidden] = useState(false)
   const [isAddingLatencyTarget, setIsAddingLatencyTarget] = useState(false)
   const [customLatencyName, setCustomLatencyName] = useState('')
   const [customLatencyUrl, setCustomLatencyUrl] = useState('')
@@ -390,6 +390,11 @@ const IPPage: React.FC = () => {
     return Math.round(successes.reduce((acc, r) => acc + r.latency, 0) / successes.length)
   })()
 
+  const appConfigLoaded = Boolean(appConfig)
+  useEffect(() => {
+    if (appConfigLoaded) void testAllLatencies()
+  }, [appConfigLoaded, testAllLatencies])
+
   const fetchIP = useCallback(
     async (p?: IPProvider) => {
       const target = p ?? provider
@@ -420,15 +425,19 @@ const IPPage: React.FC = () => {
     setTimeout(() => setCopied(false), 2000)
   }, [ipInfo?.ip])
 
+  useEffect(() => {
+    if (appConfigLoaded) void fetchIP()
+  }, [appConfigLoaded, fetchIP])
+
   return (
     <BasePage title={t('network.title')}>
       <div className="m-2 flex flex-col gap-4">
         <div className="rounded-xl border border-foreground/10 bg-content1 px-4 py-3 text-xs leading-relaxed text-foreground/65">
-          <span className="font-medium text-foreground">按需查询，保留你的选择</span>
+          <span className="font-medium text-foreground">了解你的网络出口</span>
           <HelpTip topic="network" />
           <p>
-            进入本页不会自动查询公网 IP 或测试外部网站。点击查询后，所选服务会看到本次请求的公网出口
-            IP。结果仅在当前页面使用，不显示或保存精确位置；网络拓扑来自本机内核。
+            本页自动查询出口并检测延迟。所选查询服务会看到请求的公网出口 IP；地区、城市与时区来自 IP
+            数据库估算，不是设备 GPS 位置。本页不显示或保存坐标。
           </p>
         </div>
         <div style={{ overflowX: 'clip' }} className="flex flex-col gap-4">
@@ -460,10 +469,6 @@ const IPPage: React.FC = () => {
                           if (val) {
                             setProvider(val)
                             patchAppConfig({ networkIPProvider: val })
-                            ++fetchIdRef.current
-                            setIpInfo(null)
-                            setError(null)
-                            setLoading(false)
                           }
                         }}
                       >
@@ -540,6 +545,13 @@ const IPPage: React.FC = () => {
                             </span>
                           }
                         />
+                      )}
+                      {ipInfo.region && (
+                        <InfoRow label={t('network.region')} value={ipInfo.region} />
+                      )}
+                      {ipInfo.city && <InfoRow label={t('network.city')} value={ipInfo.city} />}
+                      {ipInfo.timezone && (
+                        <InfoRow label={t('network.timezone')} value={ipInfo.timezone} />
                       )}
                       {ipInfo.asn != null && (
                         <InfoRow
@@ -675,7 +687,7 @@ const IPPage: React.FC = () => {
                   </div>
 
                   <p className="mb-3 text-xs leading-relaxed text-foreground/55">
-                    点击「开始检测」会请求下方列出的网站，这些网站会看到检测请求的公网出口
+                    检测会请求下方列出的网站，这些网站会看到检测请求的公网出口
                     IP。耗时含请求过程，不代表下载速度。
                   </p>
 

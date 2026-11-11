@@ -1,18 +1,22 @@
 import { existsSync, mkdtempSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'fs'
 import { tmpdir } from 'os'
+import { createHash } from 'crypto'
 import { join } from 'path'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import { addProfileUpdater } from '../core/profileUpdater'
 import { getOverrideConfig, updateOverrideConfig } from './override'
 import {
   createProfile,
+  getProfile,
   getProfileConfig,
   getProfileItem,
   removeProfileItem,
   updateProfileConfig,
   updateProfileItem,
   upsertPluginProfile,
-  syncPluginProfileSchedule
+  syncPluginProfileSchedule,
+  saveProfileEdits,
+  setProfileStr
 } from './profile'
 
 let testDir = ''
@@ -70,6 +74,7 @@ vi.mock('../utils/age', () => ({
   decryptAgeContent: (content: string) => Promise.resolve(content)
 }))
 vi.mock('../utils/dirs', () => ({
+  dataDir: () => testDir,
   mihomoCorePath: () => join(testDir, 'mihomo'),
   mihomoProfileWorkDir: (id: string) => join(testDir, 'work', id),
   mihomoWorkDir: () => join(testDir, 'work'),
@@ -175,6 +180,55 @@ const globalOverride = (id: string): IOverrideItem => ({
 
 afterEach(() => {
   rmSync(testDir, { recursive: true, force: true })
+})
+
+describe('active profile edits compare after validation', () => {
+  const expectedBase = async (): Promise<{ currentId: string; fingerprint: string }> => ({
+    currentId: 'remote',
+    fingerprint: createHash('sha256')
+      .update(JSON.stringify(await getProfile('remote')))
+      .digest('hex')
+  })
+
+  it('writes a remote edit to the local overlay, preserving the subscription source', async () => {
+    await saveProfileEdits('remote', newProfile, await expectedBase())
+    expect(readFileSync(join(testDir, 'profiles', 'remote.yaml'), 'utf8')).toBe(oldProfile)
+    expect((await getProfile('remote')).proxies?.[0].name).toBe('new')
+    expect(existsSync(join(testDir, 'profile-local', 'remote.json'))).toBe(true)
+    expect(mocks.hotReload).toHaveBeenCalledOnce()
+  })
+
+  it('rejects a refresh completed during core validation and keeps the refreshed source', async () => {
+    const expected = await expectedBase()
+    mocks.checkProfileConfig.mockImplementationOnce(async () => {
+      await setProfileStr('remote', newProfile)
+    })
+    await expect(saveProfileEdits('remote', oldProfile, expected)).rejects.toThrow('重新载入')
+    expect(readFileSync(join(testDir, 'profiles', 'remote.yaml'), 'utf8')).toBe(newProfile)
+    expect(existsSync(join(testDir, 'profile-local', 'remote.json'))).toBe(false)
+  })
+
+  it('rejects a profile switch during validation without writing either profile', async () => {
+    const expected = await expectedBase()
+    mocks.checkProfileConfig.mockImplementationOnce(async () => {
+      await updateProfileConfig((config) => ({ ...config, current: 'other' }))
+    })
+    await expect(saveProfileEdits('remote', newProfile, expected)).rejects.toThrow('重新载入')
+    expect(readFileSync(join(testDir, 'profiles', 'remote.yaml'), 'utf8')).toBe(oldProfile)
+    expect(existsSync(join(testDir, 'profile-local', 'remote.json'))).toBe(false)
+    expect(mocks.hotReload).not.toHaveBeenCalled()
+  })
+
+  it('validates and updates a local profile through the same guarded save path', async () => {
+    await updateProfileConfig((config) => ({
+      ...config,
+      items: config.items.map((item) => ({ ...item, type: 'local' }))
+    }))
+    await saveProfileEdits('remote', newProfile, await expectedBase())
+    expect(mocks.checkProfileConfig).toHaveBeenCalledOnce()
+    expect(readFileSync(join(testDir, 'profiles', 'remote.yaml'), 'utf8')).toBe(newProfile)
+    expect(existsSync(join(testDir, 'profile-local', 'remote.json'))).toBe(false)
+  })
 })
 
 describe('remote profile candidate validation', () => {

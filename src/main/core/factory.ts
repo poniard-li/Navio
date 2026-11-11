@@ -26,7 +26,6 @@ import { createLogger } from '../utils/logger'
 import { decryptAgeContent } from '../utils/age'
 import { DEFAULT_CONTROL_DNS, DEFAULT_CONTROL_SNIFF } from '../../shared/appConfig'
 import { atomicWriteFile } from '../utils/safeFile'
-import { compileSimpleRuntime } from '../simple/service'
 import { applyGlobalBypass } from '../../shared/dex-bypass'
 import { evaluateDnsOverrideGuard, type DnsOverrideGuardResult } from './dnsOverrideGuard'
 
@@ -137,21 +136,7 @@ export async function generateProfile(
   pendingControledMihomoConfig?: Partial<IMihomoConfig>,
   options: GenerateProfileOptions = {}
 ): Promise<GenerateProfileResult> {
-  const selectedAppConfig = await getAppConfig()
-  if (selectedAppConfig.operationMode === 'simple') {
-    const result = await compileSimpleRuntime()
-    if (result.errors.length > 0) {
-      throw new Error(`简易模式配置无效：\n${result.errors.join('\n')}`)
-    }
-    if (options.updateRuntimeConfig !== false) {
-      runtimeConfigStr = result.yaml
-      runtimeConfig = parse(result.yaml) as IMihomoConfig
-    }
-    return {
-      profileId: 'simple-mode',
-      dnsGuard: { controlDns: false, autoDisabled: false, fingerprint: null, request: null }
-    }
-  }
+  
   // 第一阶段：并行读取互不依赖的配置（强制重读 profileConfig 完成后再进入第二阶段，保证缓存一致）。
   const [profileConfig, appConfig] = await Promise.all([getProfileConfig(true), getAppConfig()])
   const { current } = profileConfig

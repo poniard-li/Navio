@@ -1,11 +1,14 @@
 import https from 'https'
 import os from 'os'
 import { existsSync } from 'fs'
+import { readFile, mkdir, writeFile } from 'fs/promises'
+import path from 'path'
 import dayjs from 'dayjs'
 import AdmZip from 'adm-zip'
 import { Cron } from 'croner'
 import { dialog } from 'electron'
 import i18next from 'i18next'
+import { stringify, parse } from '../utils/yaml'
 import { systemLogger } from '../utils/logger'
 import {
   appConfigPath,
@@ -20,6 +23,8 @@ import {
   themesDir
 } from '../utils/dirs'
 import { getAppConfig } from '../config'
+import { readBackupPassword } from './backup-password'
+import { encryptBackup, decryptBackup } from './backup-crypto'
 
 let backupCronJob: Cron | null = null
 
@@ -50,6 +55,8 @@ function getWebDAVBackupPrefix(): string {
 }
 
 async function getWebDAVClient(): Promise<WebDAVContext> {
+  if (!(await getAppConfig()).webdavEnabled)
+    throw new Error('请先启用 WebDAV 备份并确认上传目的地。')
   const { createClient, AuthType } = await import('webdav/dist/node/index.js')
   const {
     webdavUrl = '',
@@ -84,22 +91,37 @@ async function getWebDAVClient(): Promise<WebDAVContext> {
   return { client, webdavDir, webdavMaxBackups }
 }
 
-function createBackupZip(): AdmZip {
+async function createBackupZip(): Promise<AdmZip> {
   const zip = new AdmZip()
 
-  const files = [
-    appConfigPath(),
-    controledMihomoConfigPath(),
-    profileConfigPath(),
-    overrideConfigPath()
-  ]
+  const files = [controledMihomoConfigPath(), profileConfigPath(), overrideConfigPath()]
+  const settings = {
+    ...(await getAppConfig()),
+    sysProxy: { ...(await getAppConfig()).sysProxy, enable: false },
+    autoConnect: false
+  }
+  for (const key of [
+    'githubToken',
+    'webdavPassword',
+    'encryptedPassword',
+    'gistAgeSecretKey'
+  ] as const)
+    delete settings[key]
+  zip.addFile(path.basename(appConfigPath()), Buffer.from(stringify(settings)))
+  for (const name of ['simple-config.yaml', 'theme-settings.json']) {
+    const file = path.join(dataDir(), name)
+    if (existsSync(file)) zip.addLocalFile(file)
+  }
 
   const folders = [
     { path: themesDir(), name: 'themes' },
     { path: profilesDir(), name: 'profiles' },
     { path: overrideDir(), name: 'override' },
     { path: rulesDir(), name: 'rules' },
-    { path: subStoreDir(), name: 'substore' }
+    { path: subStoreDir(), name: 'substore' },
+    { path: path.join(dataDir(), 'dex-library'), name: 'dex-library' },
+    { path: path.join(dataDir(), 'profile-local'), name: 'profile-local' },
+    { path: path.join(dataDir(), 'work'), name: 'work' }
   ]
 
   for (const file of files) {
@@ -117,12 +139,95 @@ function createBackupZip(): AdmZip {
   return zip
 }
 
+async function backupPayload(): Promise<{ data: Buffer; extension: string }> {
+  const zip = await createBackupZip()
+  const data = zip.toBuffer()
+  if ((await getAppConfig()).backupEncrypted !== false)
+    return { data: await encryptBackup(data, await readBackupPassword()), extension: 'nbackup' }
+  return { data, extension: 'zip' }
+}
+
+async function restorePayload(data: Buffer, password?: string): Promise<void> {
+  if (data.length > 512 * 1024 * 1024) throw new Error('备份超过 512 MB，请使用分批迁移。')
+  const zip = new AdmZip(
+    await decryptBackup(data, password || (await readBackupPassword().catch(() => '')))
+  )
+  const entries = zip.getEntries()
+  const roots = new Set([
+    'themes',
+    'profiles',
+    'override',
+    'rules',
+    'substore',
+    'dex-library',
+    'work',
+    'profile-local'
+  ])
+  const files = new Set([
+    'config.yaml',
+    'mihomo.yaml',
+    'profile.yaml',
+    'override.yaml',
+    'simple-config.yaml',
+    'theme-settings.json'
+  ])
+  let total = 0
+  for (const entry of entries) {
+    const name = entry.entryName.replace(/\\/g, '/')
+    const parts = name.split('/')
+    if (
+      name.startsWith('/') ||
+      parts.some((p) => p === '..' || p.includes(':')) ||
+      (!roots.has(parts[0]) && !files.has(name))
+    )
+      throw new Error(`不支持的备份路径：${name}`)
+    total += entry.header.size
+    if (total > 512 * 1024 * 1024) throw new Error('解压后的备份超过 512 MB。')
+  }
+  // Validate every entry before writing; account and backup vaults are never imported.
+  const prepared = entries
+    .filter((e) => !e.isDirectory)
+    .map((entry) => {
+      let content = entry.getData()
+      if (entry.entryName === 'config.yaml') {
+        const value = parse(content.toString('utf8')) as IAppConfig
+        if (!value || typeof value !== 'object' || Array.isArray(value))
+          throw new Error('备份设置无效')
+        value.autoConnect = false
+        value.webdavEnabled = false
+        value.gistSyncEnabled = false
+        value.sysProxy = { ...value.sysProxy, enable: false }
+        for (const key of [
+          'githubToken',
+          'webdavPassword',
+          'encryptedPassword',
+          'gistAgeSecretKey'
+        ] as const)
+          delete value[key]
+        content = Buffer.from(stringify(value))
+      }
+      if (entry.entryName === 'mihomo.yaml') {
+        const value = parse(content.toString('utf8')) as IMihomoConfig
+        if (value.tun) value.tun.enable = false
+        content = Buffer.from(stringify(value))
+      }
+      return { name: entry.entryName, content }
+    })
+  for (const entry of prepared) {
+    const destination = path.resolve(dataDir(), entry.name)
+    const rel = path.relative(dataDir(), destination)
+    if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('无效恢复路径')
+    await mkdir(path.dirname(destination), { recursive: true })
+    await writeFile(destination, entry.content)
+  }
+}
+
 export async function webdavBackup(): Promise<boolean> {
   const { client, webdavDir, webdavMaxBackups } = await getWebDAVClient()
-  const zip = createBackupZip()
+  const payload = await backupPayload()
   const date = new Date()
   const backupPrefix = getWebDAVBackupPrefix()
-  const zipFileName = `${backupPrefix}_${dayjs(date).format('YYYY-MM-DD_HH-mm-ss')}.zip`
+  const zipFileName = `${backupPrefix}_${dayjs(date).format('YYYY-MM-DD_HH-mm-ss')}.${payload.extension}`
 
   try {
     await client.createDirectory(webdavDir)
@@ -130,19 +235,23 @@ export async function webdavBackup(): Promise<boolean> {
     // ignore
   }
 
-  const result = await client.putFileContents(`${webdavDir}/${zipFileName}`, zip.toBuffer())
+  const result = await client.putFileContents(`${webdavDir}/${zipFileName}`, payload.data)
 
   if (webdavMaxBackups > 0) {
     try {
-      const fileList = await client.getDirectoryContents(webdavDir, { glob: '*.zip' })
+      const fileList = await client.getDirectoryContents(webdavDir)
 
       const currentPlatformFiles = fileList.filter((file) => {
-        return file.basename.startsWith(`${backupPrefix}_`)
+        return (
+          file.basename.startsWith(`${backupPrefix}_`) && /\.(zip|nbackup)$/.test(file.basename)
+        )
       })
 
       currentPlatformFiles.sort((a, b) => {
-        const timeA = a.basename.match(/_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.zip$/)?.[1] || ''
-        const timeB = b.basename.match(/_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.zip$/)?.[1] || ''
+        const timeA =
+          a.basename.match(/_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.(?:zip|nbackup)$/)?.[1] || ''
+        const timeB =
+          b.basename.match(/_(\d{4}-\d{2}-\d{2}_\d{2}-\d{2}-\d{2})\.(?:zip|nbackup)$/)?.[1] || ''
         return timeB.localeCompare(timeA)
       })
 
@@ -166,20 +275,21 @@ export async function webdavBackup(): Promise<boolean> {
   return result
 }
 
-export async function webdavRestore(filename: string): Promise<void> {
+export async function webdavRestore(filename: string, password?: string): Promise<void> {
+  if (path.basename(filename) !== filename) throw new Error('无效备份名称')
   const { client, webdavDir } = await getWebDAVClient()
   const zipData = await client.getFileContents(`${webdavDir}/${filename}`)
-  const zip = new AdmZip(zipData as Buffer)
-  zip.extractAllTo(dataDir(), true)
+  await restorePayload(zipData as Buffer, password)
 }
 
 export async function listWebdavBackups(): Promise<string[]> {
   const { client, webdavDir } = await getWebDAVClient()
-  const files = await client.getDirectoryContents(webdavDir, { glob: '*.zip' })
-  return files.map((file) => file.basename)
+  const files = await client.getDirectoryContents(webdavDir)
+  return files.map((file) => file.basename).filter((name) => /\.(zip|nbackup)$/.test(name))
 }
 
 export async function webdavDelete(filename: string): Promise<void> {
+  if (path.basename(filename) !== filename) throw new Error('无效备份名称')
   const { client, webdavDir } = await getWebDAVClient()
   await client.deleteFile(`${webdavDir}/${filename}`)
 }
@@ -195,10 +305,10 @@ export async function initWebdavBackupScheduler(): Promise<void> {
       backupCronJob = null
     }
 
-    const { webdavBackupCron } = await getAppConfig()
+    const { webdavBackupCron, webdavEnabled } = await getAppConfig()
 
     // 如果配置了 Cron 表达式，则启动定时任务
-    if (webdavBackupCron) {
+    if (webdavEnabled && webdavBackupCron) {
       backupCronJob = new Cron(webdavBackupCron, async () => {
         try {
           await webdavBackup()
@@ -244,21 +354,21 @@ export async function reinitScheduler(): Promise<void> {
  * 导出本地备份
  */
 export async function exportLocalBackup(): Promise<boolean> {
-  const zip = createBackupZip()
+  const payload = await backupPayload()
 
   const date = new Date()
-  const zipFileName = `clash-party-backup-${dayjs(date).format('YYYY-MM-DD_HH-mm-ss')}.zip`
+  const zipFileName = `navio-backup-${dayjs(date).format('YYYY-MM-DD_HH-mm-ss')}.${payload.extension}`
   const result = await dialog.showSaveDialog({
     title: i18next.t('localBackup.export.title'),
     defaultPath: zipFileName,
     filters: [
-      { name: 'ZIP Files', extensions: ['zip'] },
+      { name: 'Navio Backup', extensions: [payload.extension] },
       { name: 'All Files', extensions: ['*'] }
     ]
   })
 
   if (!result.canceled && result.filePath) {
-    zip.writeZip(result.filePath)
+    await writeFile(result.filePath, payload.data)
     await systemLogger.info(`Local backup exported to: ${result.filePath}`)
     return true
   }
@@ -268,11 +378,11 @@ export async function exportLocalBackup(): Promise<boolean> {
 /**
  * 导入本地备份
  */
-export async function importLocalBackup(): Promise<boolean> {
+export async function importLocalBackup(password?: string): Promise<boolean> {
   const result = await dialog.showOpenDialog({
     title: i18next.t('localBackup.import.title'),
     filters: [
-      { name: 'ZIP Files', extensions: ['zip'] },
+      { name: 'Navio Backup', extensions: ['nbackup', 'zip'] },
       { name: 'All Files', extensions: ['*'] }
     ],
     properties: ['openFile']
@@ -280,8 +390,7 @@ export async function importLocalBackup(): Promise<boolean> {
 
   if (!result.canceled && result.filePaths.length > 0) {
     const filePath = result.filePaths[0]
-    const zip = new AdmZip(filePath)
-    zip.extractAllTo(dataDir(), true)
+    await restorePayload(await readFile(filePath), password)
     await systemLogger.info(`Local backup imported from: ${filePath}`)
     return true
   }

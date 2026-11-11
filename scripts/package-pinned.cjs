@@ -103,8 +103,9 @@ const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).dige
       icon.icons.map((i) => i.data)
     )
   for (const vi of ResEdit.Resource.VersionInfo.fromEntries(resources.entries)) {
-    vi.setFileVersion(0, 4, 0, 1)
-    vi.setProductVersion(0, 4, 0, 1)
+    const versionParts = pkg.version.split(/[.-]/).filter((part) => /^\d+$/.test(part)).map(Number)
+    vi.setFileVersion(...versionParts.slice(0, 4))
+    vi.setProductVersion(...versionParts.slice(0, 4))
     for (const lang of vi.getAvailableLanguages())
       vi.setStringValues(lang, {
         CompanyName: 'D.E.X Studio',

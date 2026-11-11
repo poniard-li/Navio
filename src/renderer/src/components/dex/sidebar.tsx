@@ -11,6 +11,7 @@ import {
   LuFileSliders,
   LuFolderOpen,
   LuGlobe,
+  LuHouse,
   LuLayers,
   LuListFilter,
   LuNetwork,
@@ -61,6 +62,14 @@ export const navigationGroups: {
     label: '工作区',
     english: 'Workspace',
     items: [
+      {
+        path: '/home',
+        key: 'dex.home',
+        fallback: '概览',
+        english: 'Overview',
+        keywords: '首页 连接 节点 home connect',
+        icon: LuHouse
+      },
       {
         path: '/proxies',
         key: 'sider.cards.proxies',
@@ -247,6 +256,8 @@ export const utilityItems: NavigationItem[] = [
   }
 ]
 
+const SIMPLE_PATHS = ['/home', '/proxies', '/profiles', '/connections', '/bypass']
+
 interface SidebarProps {
   collapsed: boolean
   onCollapsedChange: (value: boolean) => void
@@ -286,7 +297,6 @@ export default function DexSidebar({
   const filteredItems = allItems.filter(matches)
   const selectedProfile = profileConfig?.items?.find((item) => item.id === profileConfig.current)
   const simpleMode = appConfig?.operationMode === 'simple'
-  const simplePaths = ['/proxies', '/profiles', '/simple', '/connections', '/bypass']
 
   useEffect(() => {
     setShowAdvanced(false)
@@ -298,7 +308,7 @@ export default function DexSidebar({
     if (
       simpleMode &&
       navigationGroups.some((group) => group.items.some((item) => item.path === pathname)) &&
-      !['/proxies', '/profiles', '/simple', '/connections', '/bypass'].includes(pathname)
+      !SIMPLE_PATHS.includes(pathname)
     )
       setShowAdvanced(true)
   }, [pathname, simpleMode])
@@ -495,7 +505,7 @@ export default function DexSidebar({
           const items = group.items.filter(
             (item) =>
               matches(item) &&
-              (!simpleMode || showAdvanced || search || simplePaths.includes(item.path))
+              (!simpleMode || showAdvanced || search || SIMPLE_PATHS.includes(item.path))
           )
           if (!items.length) return null
           const expanded = collapsed || Boolean(search) || openGroups[group.id]
@@ -571,9 +581,7 @@ export default function DexSidebar({
               <span>
                 <small>{text('当前配置', 'Current configuration')}</small>
                 <strong>
-                  {simpleMode
-                    ? text('简易配置', 'Simple configuration')
-                    : selectedProfile?.name || text('尚未选择配置', 'No profile selected')}
+                  {selectedProfile?.name || text('尚未选择配置', 'No profile selected')}
                 </strong>
               </span>
               <LuChevronRight aria-hidden="true" />
