@@ -71,6 +71,7 @@ const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).dige
   if (!isInside(appStage, oldOut)) throw new Error('Invalid out path')
   await fs.rm(oldOut, { recursive: true, force: true })
   await fs.cp(path.join(root, 'out'), oldOut, { recursive: true })
+  await fs.cp(path.join(root, 'resources'), path.join(appStage, 'resources'), { recursive: true })
   const pkg = JSON.parse(await fs.readFile(path.join(root, 'package.json'), 'utf8'))
   delete pkg.devDependencies
   delete pkg.scripts

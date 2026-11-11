@@ -17,10 +17,8 @@ const MODEL_ASSETS: Record<SmartModelVariant, string> = {
   large: 'Model-large.bin'
 }
 
-// 只看文件头尾判断完整性，不把整个模型（最大 26MB）读进内存。真正的校验是把模型加载一遍，
-// 那件事只有内核做得到；这里是启发式，冲着实际发生过的那种残片去的——中断的下载与完整
-// 文件开头一模一样（都是 tree），只有结尾能分开。误判方向是安全的：把好模型判成坏的，
-// 用户重下一次即可；把残片当好的放过去，内核就再也起不来了。
+// 检查文件头尾以识别中断的下载，避免将整个模型读入内存。
+// 此检查不解析模型内容；完整格式由内核加载时验证。
 const MODEL_PROBE_SIZE = 64
 const MODEL_HEADER = 'tree'
 const MODEL_FOOTER = '[/target_enhance]'
@@ -51,10 +49,7 @@ async function isSourceNewer(sourcePath: string, targetPath: string): Promise<bo
   }
 }
 
-// Smart 内核在工作目录找不到 Model.bin 时会联网下载模型。而配置检查（mihomo -t）跑在独立的
-// test 目录里，该目录从不包含模型；这次检查又发生在旧内核已经停止、系统代理已经撤下之后，
-// 于是下载必然超时失败，每次重启白白多等约 20 秒，且失败不留文件，下次重启重演一遍。
-// 正式工作目录已有模型时先同步过去，跳过这次注定失败的下载。
+// 配置检查使用独立目录。复用工作目录中的模型，避免每次检查都重新下载。
 export async function syncSmartModelToTestDir(targetDir = mihomoTestDir()): Promise<void> {
   const source = path.join(mihomoWorkDir(), MODEL_FILE)
   if (!existsSync(source)) return
@@ -83,10 +78,7 @@ export async function getSmartModelStatus(): Promise<ISmartModelStatus> {
   }
 }
 
-// 下载分三步走，每一步都是冲着「别把用户搞得比现在更惨」去的：先下到临时文件，验过了再
-// 改名顶上去（同目录改名是原子的，内核要么读到旧模型、要么读到新模型，不会读到半个）；
-// 验不过就什么都不动，旧模型哪怕过时也强过一个让内核起不来的残片；不先删旧的再下新的，
-// 网断在中间时用户至少还剩原来那个。
+// 下载到临时文件，检查完整性后再改名替换；下载或检查失败时保留原模型。
 export async function downloadSmartModel(variant: SmartModelVariant): Promise<ISmartModelStatus> {
   const target = path.join(mihomoWorkDir(), MODEL_FILE)
   const temp = `${target}.download`

@@ -22,7 +22,7 @@ function guideSteps(simple: boolean): GuideStep[] {
     {
       title: `认识 ${PRODUCT_NAME}`,
       description:
-        '<p>用几步认识订阅、代理与直连例外。我们会在真实界面上指出它们的位置。</p><p><strong>引导只介绍操作，不会开启系统代理或 TUN，也不会更改你的路由设置。</strong></p>'
+        '<p>依次了解订阅、代理与直连例外，以及它们在界面中的位置。</p><p><strong>引导不会开启系统代理或 TUN，也不会更改路由设置。</strong></p>'
     },
     {
       title: '从左侧找到需要的功能',

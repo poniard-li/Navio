@@ -1,6 +1,7 @@
 import { createHash, randomUUID } from 'crypto'
 import { open, rename, rm } from 'fs/promises'
 import { app, dialog, BrowserWindow, shell } from 'electron'
+import { isPortable } from '../utils/dirs'
 import { dexAccountRequest, dexServerUrl } from './dex-account'
 import { fetchReleaseAsset } from './release-download'
 
@@ -13,6 +14,19 @@ interface Release {
 }
 let available: Release | undefined
 let downloading = false
+
+function releaseTag(version: string): string {
+  if (
+    typeof version !== 'string' ||
+    version.length > 100 ||
+    !/^v?(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)(?:-[0-9A-Za-z-]+(?:\.[0-9A-Za-z-]+)*)?$/.test(
+      version
+    )
+  )
+    throw new Error('更新清单中的版本号无效。')
+  return `v${version.replace(/^v/, '')}`
+}
+
 export function newerVersion(candidate: string, installed: string): boolean {
   const parse = (value: string): number[] =>
     value
@@ -34,6 +48,7 @@ export async function checkUpdate(): Promise<IAppVersion | undefined> {
     {},
     false
   )) as { release: Release | null }
+  if (data.release) releaseTag(data.release.version)
   if (!data.release || !newerVersion(data.release.version, app.getVersion())) {
     available = undefined
     return undefined
@@ -56,6 +71,22 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
   }
   const release = available
   if (!release || release.version !== version) throw new Error('此更新已变更，请重新检查。')
+  if (!isPortable()) {
+    const tag = releaseTag(release.version)
+    const result = await dialog.showMessageBox({
+      type: 'info',
+      title: '更新 Navio',
+      message: `下载 Navio ${release.version} 安装包`,
+      detail:
+        '在此版本发布页下载 Windows x64 的 setup.exe 安装包，从系统托盘退出 Navio 后运行。安装版配置保存在 %APPDATA%\\DEX-STUDIO-NEXT，更新后继续保留。',
+      buttons: ['打开发布页', '取消'],
+      defaultId: 0,
+      cancelId: 1
+    })
+    if (result.response === 0)
+      await shell.openExternal(`https://github.com/poniard-li/Navio/releases/tag/${tag}`)
+    return
+  }
   const server = await dexServerUrl(),
     url = new URL(release.url, server)
   if (url.protocol !== 'https:' && url.origin !== server)

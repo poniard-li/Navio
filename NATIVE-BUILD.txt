@@ -27,7 +27,7 @@ on unrestricted development hosts.
 
 BUILD_MODE optionally selects a Vite mode; the default is production. Existing
 LEGACY_BUILD handling is preserved by the source config, but only the default
-modern Windows build is verified for this preview.
+modern Windows build has been verified for this Public Beta.
 
 Monaco's upstream plugin uses node_modules/.monaco for its worker build cache.
 It reuses existing workers and builds missing workers through its normal path.
@@ -40,4 +40,4 @@ Tests can avoid their separate config-bundling step with:
     node node_modules/vitest/vitest.mjs run --configLoader native
 
 On Windows, src/main/utils/app-info/linux.test.ts requires POSIX symlink behavior
-and is excluded from the preview validation command documented with the release.
+and is excluded from the Windows validation command documented in CONTRIBUTING.md.

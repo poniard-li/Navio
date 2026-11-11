@@ -1,23 +1,29 @@
-name: 功能建议
-description: 提出一个使用场景或改进建议
+name: 功能请求
+description: '提出 Navio 功能或交互改进建议'
 title: '[Feature] '
 body:
-  - type: textarea
-    id: problem
+  - type: checkboxes
+    id: ensure
     attributes:
-      label: 希望解决什么问题？
-      description: 请描述实际使用场景、当前操作和遇到的困难。
+      label: 提交前确认
+      description: 请先查看已有建议，相关问题可在原 Issue 中补充。
+      options:
+        - label: 我已搜索已有 Issue，未找到相同建议
+
+  - type: dropdown
+    attributes:
+      label: 操作系统
+      description: 请提供操作系统类型
+      multiple: true
+      options:
+        - macOS
+        - Windows
+        - Linux
     validations:
       required: true
   - type: textarea
-    id: outcome
     attributes:
-      label: 希望软件怎样处理？
-      description: 可以描述期望行为、示例或其他可行方式。
+      label: 使用场景与建议
+      description: 说明目前遇到的困难、希望如何操作，以及预期结果。
     validations:
       required: true
-  - type: textarea
-    id: context
-    attributes:
-      label: 其他补充
-      description: 可选。不要提交订阅凭据或真实账号资料。

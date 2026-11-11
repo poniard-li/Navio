@@ -2,7 +2,7 @@ import { Suspense, lazy, useEffect, useState } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
 import { LuPalette, LuPanelLeftClose, LuPanelLeftOpen, LuSettings2, LuSearch } from 'react-icons/lu'
-import MihomoIcon from '../base/mihomo-icon'
+import NavioIcon from '../base/navio-icon'
 import OutboundModeSwitcher from '../sider/outbound-mode-switcher'
 import { PRODUCT_NAME } from '../../../../shared/product'
 import FeatureSearch from './feature-search'
@@ -47,7 +47,7 @@ export default function ClassicSidebar({
     <aside className="side dex-sidebar dex-classic-sidebar sider-rail" data-expanded={!collapsed}>
       <div className="dex-brand app-drag">
         <span className="dex-brand-symbol">
-          <MihomoIcon size={25} />
+          <NavioIcon size={25} />
         </span>
         <button
           className="dex-brand-word app-nodrag"

@@ -36,7 +36,7 @@ export default function ModeSelection({
         <ModalHeader className="dex-setup-heading">
           <span className="dex-setup-eyebrow">{canDismiss ? '配置模式' : '初次使用 · 01'}</span>
           <h1>{canDismiss ? '选择适合你的配置方式' : `欢迎使用 ${PRODUCT_NAME}`}</h1>
-          <p>我们会记住你的选择。之后可随时在设置中切换。</p>
+          <p>所选模式保存在本机，可随时在设置中切换。</p>
         </ModalHeader>
         <ModalBody className="dex-setup-body">
           <div className="dex-setup-choices" aria-busy={busy}>

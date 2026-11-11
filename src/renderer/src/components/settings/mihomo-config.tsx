@@ -150,9 +150,7 @@ const MihomoConfig: React.FC = () => {
             type="number"
             value={(subscriptionTimeout / 1000)?.toString()}
             onValueChange={async (v: string) => {
-              // 清空输入框时 parseInt('') 是 NaN，NaN * 1000 仍是 NaN，
-              // 经 IPC 序列化后会以 null 落盘。onBlur 只在失焦时纠正，
-              // 中间这段时间配置里已经是坏值，所以这里直接不写。
+              // 清空输入时不保存 NaN，避免序列化成 null；失焦时再补默认值。
               const num = parseInt(v, 10)
               if (!Number.isFinite(num)) return
               await patchAppConfig({ subscriptionTimeout: num * 1000 })

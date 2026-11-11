@@ -35,7 +35,7 @@ import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useProfileConfig } from '@renderer/hooks/use-profile-config'
 import { markInitialContentPartReady } from '@renderer/utils/startup'
 import { platform } from '@renderer/utils/init'
-import MihomoIcon from '../base/mihomo-icon'
+import NavioIcon from '../base/navio-icon'
 import OutboundModeSwitcher from '../sider/outbound-mode-switcher'
 import SysproxySwitcher from '../sider/sysproxy-switcher'
 import TunSwitcher from '../sider/tun-switcher'
@@ -392,7 +392,7 @@ export default function DexSidebar({
     <aside className="side dex-sidebar" aria-label={text('主导航', 'Main navigation')}>
       <div className="dex-brand app-drag">
         <span className="dex-brand-symbol">
-          <MihomoIcon size={25} />
+          <NavioIcon size={25} />
         </span>
         <span className="dex-brand-word">{PRODUCT_NAME}</span>
         <button

@@ -59,7 +59,7 @@ const topics = [
     route: '/mihomo',
     summary: '在 Mihomo 的扩展分支中加入 Smart 策略组，自动选择线路。',
     detail:
-      '它参考连接成功率、耗时等表现来选节点，可选 LightGBM 模型辅助判断；并不是聊天 AI，也不保证所有网络都更快。模型可能需要下载。训练数据收集会增加本地记录，不懂模型训练可以保持关闭。日常使用先选稳定版。'
+      'Smart 根据连接成功率、耗时和历史表现选择节点，也可使用 LightGBM 模型评分，效果取决于网络环境。模型需单独下载。训练数据收集会在本机记录连接信息，仅在需要训练自定义模型时开启。日常使用建议选择稳定版内核。'
   },
   {
     title: '公网 IP、ISP 与 ASN',
@@ -73,7 +73,7 @@ const topics = [
     title: '网络信息如何查询',
     tag: '隐私说明',
     route: '/network',
-    summary: '公网信息只在主动查询时向所选第三方请求，不显示经纬度坐标。',
+    summary: '打开网络信息页面时会向所选第三方查询公网出口，不显示经纬度坐标。',
     detail:
       '查询服务会看到该次请求的公网出口 IP，并可能按其隐私政策记录请求。该查询不读取 GPS，也不需要精确位置权限。网络诊断与连接日志同样可能包含 IP 或域名；分享截图、日志之前请检查并遮盖敏感内容。'
   },
@@ -81,9 +81,9 @@ const topics = [
     title: '标准模式与简易模式',
     tag: '界面偏好',
     route: '/settings',
-    summary: '标准模式使用完整订阅配置；简易模式提供可视化配置和精简导航。',
+    summary: '标准模式显示完整功能；简易模式优先显示常用功能，可展开更多设置。',
     detail:
-      '首次选择会保存在本机，之后按你的选择启动。两种模式使用各自的配置工作流程，不只是页面密度变化；切换会重新生成并加载配置。简易模式的更多功能可以展开，设置中也能随时切换模式。'
+      '两种模式共用当前订阅和规则，切换界面模式不会更换配置或重新连接。你的选择会保存在本机，也可以随时在设置中更改。'
   }
 ]
 
@@ -100,8 +100,8 @@ export default function Help(): React.JSX.Element {
       <div className="mx-auto max-w-5xl p-5 sm:p-7 space-y-6">
         <div className="flex flex-wrap items-end justify-between gap-4">
           <div>
-            <span className="text-xs text-primary font-medium tracking-wide">从容上手</span>
-            <h1 className="text-2xl font-semibold tracking-tight mt-2">知道每一步，改变了什么。</h1>
+            <span className="text-xs text-primary font-medium tracking-wide">功能说明</span>
+            <h1 className="text-2xl font-semibold tracking-tight mt-2">了解常用功能</h1>
             <p className="text-sm text-default-500 leading-relaxed mt-2">
               先了解常用功能，再按需要展开高级设置。
             </p>
@@ -118,7 +118,9 @@ export default function Help(): React.JSX.Element {
         <div className="flex gap-3 rounded-xl border border-default-200 bg-default-50 p-4">
           <LuShieldCheck className="shrink-0 text-primary mt-0.5" size={19} />
           <p className="text-sm leading-relaxed text-default-600">
-            订阅提供线路，软件负责连接与管理。主题工坊及将来的软件账号与代理订阅相互独立，使用订阅不需要登录软件账号。
+            首次使用 Navio 需要登录 D.E.X
+            账号。账号用于主题等软件服务，代理订阅需自行导入；订阅链接和节点凭据不会上传到 D.E.X
+            官方云。
           </p>
         </div>
         <Input

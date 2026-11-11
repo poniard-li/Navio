@@ -1,6 +1,6 @@
 {
   "name": "navio-desktop",
-  "version": "0.6.0-beta.2",
+  "version": "0.6.0-beta.3",
   "description": "Navio desktop client by D.E.X Studio, based on Clash Party and Mihomo",
   "type": "module",
   "main": "./out/main/index.js",
@@ -27,7 +27,8 @@
     "build:mac": "electron-vite build && electron-builder --publish never --mac",
     "build:linux": "electron-vite build && electron-builder --publish never --linux",
     "build": "electron-vite build",
-    "build:native": "node scripts/build-native.mjs"
+    "build:native": "node scripts/build-native.mjs",
+    "release:win": "node scripts/release-windows.cjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",

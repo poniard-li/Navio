@@ -506,7 +506,7 @@ const Mihomo: React.FC = () => {
                       <span>{t('mihomo.smartCoreUseLightGBM')}</span>
                       <HelpTip
                         title="LightGBM 评分模型"
-                        content="让 Smart 使用机器学习模型辅助评价节点表现。不是聊天模型，也不能保证比默认算法更快；需要可用模型文件，下载时会联系所设置的模型来源。"
+                        content="使用 LightGBM 模型为节点评分，选路效果取决于网络环境。需要先下载可用模型，下载会访问设置中的模型来源。"
                       />
                     </div>
                   }

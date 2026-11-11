@@ -1,39 +1,48 @@
 name: 错误反馈
-description: 报告 Navio 的可复现问题
+description: '报告 Navio 使用中遇到的问题'
 title: '[Bug] '
 body:
-  - type: markdown
+  - type: checkboxes
+    id: ensure
     attributes:
-      value: 请先搜索已有问题。不要上传订阅链接、账号密码、验证码、令牌或未脱敏日志；安全漏洞请查看 SECURITY.md。
+      label: 提交前确认
+      description: 请先搜索已有问题，并移除截图、日志中的账号、订阅链接和访问凭据。
+      options:
+        - label: 我已搜索已有 Issue，未找到相同问题
+        - label: 上传的内容不包含订阅链接、密码、令牌或验证码
+
+  - type: dropdown
+    attributes:
+      label: 操作系统
+      description: 请提供操作系统类型
+      multiple: true
+      options:
+        - macOS
+        - Windows
+        - Linux
+    validations:
+      required: true
   - type: input
-    id: version
+    attributes:
+      label: 系统版本
+      description: 请提供出现问题的操作系统版本
+    validations:
+      required: true
+  - type: input
     attributes:
       label: Navio 版本
-      placeholder: 例如 0.6.0-beta.1
-    validations:
-      required: true
-  - type: input
-    id: windows
-    attributes:
-      label: Windows 版本与架构
-      placeholder: 例如 Windows 11 24H2 x64
+      description: 可在“关于”中查看完整版本号。
     validations:
       required: true
   - type: textarea
-    id: reproduce
+    attributes:
+      label: 期望结果与实际情况
+      description: 说明原本希望完成什么，以及实际出现的现象或错误信息。
+    validations:
+      required: true
+  - type: textarea
     attributes:
       label: 复现步骤
-      description: 描述从启动软件到出现问题的最短操作过程。
+      description: 按操作顺序列出步骤。无法稳定复现时，请说明出现频率及触发条件。
     validations:
       required: true
-  - type: textarea
-    id: expected
-    attributes:
-      label: 期望结果与实际结果
-    validations:
-      required: true
-  - type: textarea
-    id: logs
-    attributes:
-      label: 已脱敏的日志或截图
-      description: 可选。请遮盖私人网络信息，并移除订阅、密码和会话数据。

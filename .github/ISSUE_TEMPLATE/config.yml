@@ -1,8 +1,8 @@
 blank_issues_enabled: false
 contact_links:
-  - name: 安全问题反馈说明
-    url: https://github.com/poniard-li/Navio/blob/main/SECURITY.md
-    about: 请勿在公开 Issue 中发布敏感漏洞细节或凭据。
-  - name: 版本与下载
-    url: https://github.com/poniard-li/Navio/releases
-    about: 查看各版本说明、源码与校验文件。
+  - name: '使用说明'
+    about: '查看 Navio 使用说明与已知限制'
+    url: 'https://github.com/poniard-li/Navio#readme'
+  - name: '版本下载'
+    about: '下载 Navio 并查看版本更新内容'
+    url: 'https://github.com/poniard-li/Navio/releases'

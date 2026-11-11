@@ -12,7 +12,7 @@ const ErrorFallback = ({ error }: FallbackProps): React.ReactElement => {
     <div className="p-4">
       <h2 className="my-2 text-lg font-bold">{t('common.error.appCrash')}</h2>
 
-      {/* 崩溃后整棵组件树都被替换掉，此前只能杀进程重启；重新加载渲染进程即可回到可用状态 */}
+      {/* 重新加载渲染进程以恢复界面。 */}
       <Button size="sm" color="primary" onPress={() => location.reload()}>
         {t('common.error.reload')}
       </Button>
@@ -21,20 +21,10 @@ const ErrorFallback = ({ error }: FallbackProps): React.ReactElement => {
         color="primary"
         variant="flat"
         className="ml-2"
-        onPress={() => open('https://github.com/mihomo-party-org/mihomo-party/issues/new/choose')}
+        onPress={() => open('https://github.com/poniard-li/Navio/issues/new/choose')}
       >
         GitHub
       </Button>
-      <Button
-        size="sm"
-        color="primary"
-        variant="flat"
-        className="ml-2"
-        onPress={() => open('https://t.me/mihomo_party_group')}
-      >
-        Telegram
-      </Button>
-
       <Button
         size="sm"
         variant="flat"

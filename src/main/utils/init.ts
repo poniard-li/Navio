@@ -192,9 +192,8 @@ async function initFiles(): Promise<void> {
             await initLogger.warn(`Skipping ${file}: file is in use or permission denied`)
             return
           }
-          // ENOENT 不代表源文件不存在（入口已检查过），而是 cp() 内部先 stat 再 unlink/chmod 时
-          // 目标被别人换掉了——内核的 geo 自动更新、杀毒软件、另一个实例都会碰 work 目录。
-          // 直接抛出会让 geoip.dat 这类关键文件把整个 initFiles 拖垮，重试一次即可。
+          // cp() 期间目标可能被 Geo 自动更新、杀毒软件或其他实例替换。
+          // ENOENT 时重试一次；重试仍失败则保留原错误处理。
           if (code !== 'ENOENT') throw error
           await initLogger.warn(`Retrying ${file}: target changed while copying`)
           await new Promise((resolve) => setTimeout(resolve, 100))
