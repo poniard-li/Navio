@@ -1,0 +1,21 @@
+{
+  "name": "dex-studio",
+  "productName": "D.E.X STUDIO",
+  "version": "0.1.0",
+  "description": "D.E.X STUDIO desktop client with an independent Clash core adapter",
+  "author": "D.E.X STUDIO",
+  "private": true,
+  "main": "electron/main.cjs",
+  "scripts": {
+    "start": "electron .",
+    "test": "node --test test/*.cjs",
+    "package": "node scripts/package.cjs"
+  },
+  "dependencies": {
+    "yaml": "2.9.1"
+  },
+  "devDependencies": {
+    "electron": "45.3.0",
+    "@electron/packager": "20.3.0"
+  }
+}

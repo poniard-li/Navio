@@ -1,0 +1,13 @@
+Navio historical source snapshot / Public Beta archive
+
+Public tag: v0.1.0-beta.1
+Original internal name/version: dex-studio 0.1.0
+Original source SHA256: 794d7a82e1eff00f21292ec5355ea60b270c50dc12c8f6b0ffd38386811038f9
+
+The original resources/core directory (clash.exe, its signature, and Country.mmdb) is excluded.
+The historical application code is unchanged. The original archive is retained locally unchanged.
+This source snapshot cannot run the proxy by itself; an independently obtained compatible core and data are required.
+This notice does not grant rights in the removed binaries or assert an official upstream redistribution license.
+Original third-party notices describe the historical local build and are preserved as evidence, not as a statement that the removed files remain included.
+No historical online publication date is claimed. The beta tag is a new archival label.
+The historical package did not declare a first-party source license; this snapshot does not invent one.

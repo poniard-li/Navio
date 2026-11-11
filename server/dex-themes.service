@@ -1,0 +1,26 @@
+[Unit]
+Description=D.E.X STUDIO theme library API
+After=network.target
+
+[Service]
+Type=simple
+User=dex-themes
+Group=dex-themes
+WorkingDirectory=/opt/dex-themes
+EnvironmentFile=/etc/dex-themes.env
+ExecStart=/usr/bin/node /opt/dex-themes/server/index.cjs
+Restart=on-failure
+RestartSec=5
+StateDirectory=dex-themes
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=true
+ReadWritePaths=/var/lib/dex-themes
+RestrictAddressFamilies=AF_INET AF_INET6 AF_UNIX
+MemoryMax=192M
+TasksMax=64
+
+[Install]
+WantedBy=multi-user.target

@@ -1,0 +1,114 @@
+D.E.X STUDIO · 主题库服务部署
+
+本目录提供可部署服务，尚未表示线上已部署或已连接。
+阿里云终端推荐先阅读 安装步骤.txt，使用 install.sh 一条命令安装独立 Docker 服务。
+connect-caddy.sh 可在显式指定 Caddy 容器及网络后接入，并输出配置片段与准确校验命令。
+首版使用独立发布令牌，不要求客户端登录账号，也不处理代理订阅。
+用户账号、主题作者身份验证、收藏/评分、审核平台属于后续功能。
+当前 author 是创作者自填文本，不代表认证身份。发布令牌仅发给可信创作者；
+管理员令牌用于更新任何已有 ID，不能分发给普通创作者。
+
+目标复用
+  已知盲盒 API 域名 https://mydex.top；建议新接口 https://mydex.top/dex-api。
+  现有服务使用 Caddy。独立服务和路径分流不会要求迁移原站或更改订阅服务器。
+  本包不包含现有服务器密码、SSH 密钥或令牌。实际部署前检查当前 Caddy 配置、
+  Docker 网络与端口占用，备份配置并先通过配置校验。不要覆盖现有站点配置。
+
+运行条件
+  Node.js 22 或 24；零第三方运行依赖。默认仅监听 127.0.0.1:17896。
+  公共入口应由现有 Caddy 提供 HTTPS。应用内部请求不需要放开 CORS。
+  所有主题仅是 JSON 色值与圆角；禁止 CSS、HTML、JS、URL 和未知字段。
+  每个主题最大 8192 字节；最多 1000 个；单次列表最大 100 条。
+  发布端点按来源连接 IP 每 10 分钟最多 30 次。服务不信任 X-Forwarded-For；
+  反向代理场景的应用限流因此是代理 IP 的合计额度，可在 Caddy 另加访问策略。
+
+令牌准备
+  连续运行两次，分别作为 UPLOAD_TOKEN 和 ADMIN_TOKEN：
+    node -e "console.log(require('node:crypto').randomBytes(32).toString('hex'))"
+  二者必须不同，32–512 个可打印 ASCII 字符，不含空格。
+  不要将 .env 放入源码仓库或客户端安装包；客户端仅在本次发布时使用输入令牌。
+  两个令牌均为空时服务只提供读取，上传返回 503。
+
+方案 A：主机 systemd（Caddy 也运行于主机）
+  1. 在 /opt/dex-themes 保留 server/ 与 shared/ 两个目录。
+  2. 创建无登录权限的 dex-themes 系统用户，安装 Node 22+。
+  3. 将 .env.example 复制为 /etc/dex-themes.env，写入新生成的令牌。
+     DATA_DIR=/var/lib/dex-themes，HOST=127.0.0.1，PORT=17896。
+     chown root:root /etc/dex-themes.env
+     chmod 600 /etc/dex-themes.env
+  4. 核对 `command -v node`，必要时修改 dex-themes.service 的 ExecStart。
+     将 dex-themes.service 复制到 /etc/systemd/system/ 后：
+       systemctl daemon-reload
+       systemctl enable --now dex-themes
+       curl --fail http://127.0.0.1:17896/health
+  5. 将下面两段插入现有 mydex.top 站点块中，使该路径先于现有兜底代理命中。
+     原有其他路径处理保留。若已使用 route/handle，请遵循原有结构：
+
+       @dex_api_root path /dex-api
+       redir @dex_api_root /dex-api/ 308
+       handle_path /dex-api/* {
+           reverse_proxy 127.0.0.1:17896
+       }
+
+     handle_path 会移除 /dex-api 前缀，因此 /dex-api/themes 转发为 /themes。
+     保持原有兜底行为在单独的 handle { ... } 中；检查 Caddy route 排序。
+     用当前部署方式运行 caddy validate，再平滑 reload。
+     不要替换整份 Caddyfile，也不要停止原盲盒容器。
+
+方案 B：独立 Docker Compose（现有 Caddy 在 Docker 中）
+  1. 将本包放在独立目录 /opt/dex-themes，不要覆盖 /opt/DEX。
+  2. 将 server/.env.example 复制成 server/.env 并填写独立令牌，chmod 600。
+  3. 从 /opt/dex-themes 执行：
+       docker compose -p dex-themes --env-file server/.env -f server/compose.yaml up -d --build
+     主机仅开放本机 17896，不抢占现有 80/443 或盲盒端口。
+     数据位于 dex-themes 独立持久卷，不能与盲盒数据库卷混用。
+  4. 如果 Caddy 是容器，它的 127.0.0.1 指向自己，不能直接使用方案 A 的 upstream。
+     先查看既有 Caddy 所在网络；将这个主题服务接入该网络，使用独立网络别名：
+
+       services:
+         themes:
+           networks:
+             dex-existing:
+               aliases:
+                 - dex-theme-api
+       networks:
+         dex-existing:
+           external: true
+           name: ${DEX_CADDY_NETWORK:?Set the actual existing Caddy network name}
+
+     将上面内容存为 server/compose.caddy-network.yaml，替换实际环境变量后运行：
+       docker compose -p dex-themes --env-file server/.env -f server/compose.yaml -f server/compose.caddy-network.yaml up -d --build
+     对应 Caddy 片段中的 upstream 使用 dex-theme-api:17896。
+     在实际 Caddy 容器内执行 validate，再通过原部署方式 reload。
+     如果旧网络不存在或是 host 模式，先核对网络再选择主机或容器方案。
+
+客户端连接
+  主题库服务器填 https://mydex.top/dex-api，然后刷新。
+  本地开发可填 http://127.0.0.1:17896。
+  未部署完成前应保持客户端服务器地址为空，避免展示误导性的在线状态。
+  桌面端从主进程访问接口，默认无 Origin；浏览器不在默认允许来源中。
+  如后续开发网页后台，将它的精确 HTTPS origin 加到 CORS_ORIGINS，逗号分隔，
+  例如 https://www.mydex.top；CORS 不能代替发布令牌。
+
+接口
+  GET /health
+    200 {"status":"ok","service":"dex-themes","version":1}
+  GET /themes?limit=50&offset=0
+    200 {"themes":[...],"total":12,"nextOffset":null}
+  POST /themes
+    Authorization: Bearer <发布令牌或管理员令牌>
+    Content-Type: application/json
+    Body: 完整主题 JSON
+    新 ID 201 {"theme":{...}}；已有 ID 仅管理员令牌可更新，200。
+    内置 obsidian/porcelain/midnight/rose ID 不可上传覆盖。
+    无效令牌 401，非管理员覆盖 403，非法主题 400，过大 413，频率限制 429。
+    不提供公共删除接口。管理员需维护数据目录或未来接入审核后台。
+
+验证与回滚
+  node --test test/themes*.cjs
+  curl --fail https://mydex.top/dex-api/health
+  curl --fail 'https://mydex.top/dex-api/themes?limit=10&offset=0'
+  同时检查原盲盒页面/API、www 官网仍正常。
+  如需回滚，仅撤回新增 /dex-api 路由并停止 dex-themes 独立服务；
+  不对 /opt/DEX 执行 down，不删除任何既有卷。
+  定期备份独立主题数据；更新前先备份。数据中不包含订阅信息或用户代理凭据。
