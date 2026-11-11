@@ -4,6 +4,7 @@ import path from 'path'
 import { mihomoWorkDir, mihomoTestDir } from '../utils/dirs'
 import { managerLogger } from '../utils/logger'
 import { downloadGitHubAsset } from '../utils/github'
+import { withProfileCheckLock } from './check-profile'
 
 const MODEL_FILE = 'Model.bin'
 
@@ -54,11 +55,11 @@ async function isSourceNewer(sourcePath: string, targetPath: string): Promise<bo
 // test 目录里，该目录从不包含模型；这次检查又发生在旧内核已经停止、系统代理已经撤下之后，
 // 于是下载必然超时失败，每次重启白白多等约 20 秒，且失败不留文件，下次重启重演一遍。
 // 正式工作目录已有模型时先同步过去，跳过这次注定失败的下载。
-export async function syncSmartModelToTestDir(): Promise<void> {
+export async function syncSmartModelToTestDir(targetDir = mihomoTestDir()): Promise<void> {
   const source = path.join(mihomoWorkDir(), MODEL_FILE)
   if (!existsSync(source)) return
 
-  const target = path.join(mihomoTestDir(), MODEL_FILE)
+  const target = path.join(targetDir, MODEL_FILE)
   if (existsSync(target) && !(await isSourceNewer(source, target))) return
 
   try {
@@ -103,6 +104,6 @@ export async function downloadSmartModel(variant: SmartModelVariant): Promise<IS
     throw error
   }
 
-  await syncSmartModelToTestDir()
+  await withProfileCheckLock(mihomoTestDir(), () => syncSmartModelToTestDir())
   return getSmartModelStatus()
 }

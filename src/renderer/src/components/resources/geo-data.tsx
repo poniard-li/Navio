@@ -45,6 +45,7 @@ const GeoData: React.FC = () => {
           数据。首次使用需要这些数据的规则时，请从下方已保存的来源下载；默认来源为 MetaCubeX 的
           GitHub
           数据发布。下载只保存到本机，不上传订阅或节点，不会自动开启代理。数据来源可能根据网络状况暂时不可达。
+          此下载入口需在内核停止时使用；内核运行时可使用下方的数据更新功能。
         </p>
         {missing.length > 0 && <p className="text-sm text-warning">待获取：{missing.join('、')}</p>}
         <Button

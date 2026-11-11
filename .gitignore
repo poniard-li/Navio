@@ -8,8 +8,6 @@ out
 *.log*
 .idea
 party.md
-CLAUDE.md
-agent.md
 tsconfig.node.tsbuildinfo
 *.tsbuildinfo
 .env

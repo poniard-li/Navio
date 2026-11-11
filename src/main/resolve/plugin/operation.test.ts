@@ -638,7 +638,7 @@ describe('route fallback (§1)', () => {
   })
 })
 
-describe('codex-review fixes (operation)', () => {
+describe('operation preflight time budget', () => {
   it('ISS-003: a preflight resolution that never returns is cut off by the op budget', async () => {
     const started = Date.now()
     const r = await runOperation(

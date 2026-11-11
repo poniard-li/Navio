@@ -1,4 +1,5 @@
 import { existsSync } from 'fs'
+import { createHash, randomUUID } from 'crypto'
 import { mkdir, readFile, rm } from 'fs/promises'
 import path from 'path'
 import { isDeepStrictEqual } from 'util'
@@ -9,7 +10,8 @@ import {
   simpleConfigPath,
   simpleOutputPath,
   mihomoWorkConfigPath,
-  mihomoWorkDir
+  mihomoWorkDir,
+  mihomoTestDir
 } from '../utils/dirs'
 import {
   defaultSimpleDraft,
@@ -19,7 +21,7 @@ import {
   type SimplePreview
 } from '../../shared/simple-config'
 import { applyGlobalBypass } from '../../shared/dex-bypass'
-import { compileSimpleConfig, type SimpleSharedConfig } from './compiler'
+import { compileSimpleConfig, isObject, type SimpleSharedConfig } from './compiler'
 import { resolveSimpleDraft } from './subscriptions'
 import {
   cleanupSimpleConfig,
@@ -109,6 +111,30 @@ export async function compileAndWriteSimple(
   await atomicWriteFile(mihomoWorkConfigPath('work'), result.yaml, { encoding: 'utf8' })
   return result
 }
+
+function validationYaml(yaml: string): string {
+  const config = parse<Record<string, unknown>>(yaml)
+  for (const kind of ['proxy-providers', 'rule-providers']) {
+    if (!isObject(config[kind])) continue
+    for (const [name, provider] of Object.entries(config[kind])) {
+      if (!isObject(provider) || typeof provider.path !== 'string') continue
+      if (provider.type === 'file') {
+        // Local providers still resolve against the running configuration's home.
+        // The manager permits reading that directory through SAFE_PATHS.
+        provider.path = path.resolve(mihomoWorkDir(), provider.path)
+      } else if (provider.type === 'http') {
+        // A configured absolute path or ../work cache must not let -t write into
+        // the live core's directory. This affects the candidate only.
+        const cacheKey = createHash('sha256')
+          .update(JSON.stringify([kind, name, provider.url, provider.path]))
+          .digest('hex')
+        provider.path = path.join(mihomoTestDir(), 'simple-providers', cacheKey)
+      }
+    }
+  }
+  return stringify(config)
+}
+
 export async function commitSimpleState(
   state: SimpleState,
   next: SimpleState,
@@ -154,12 +180,13 @@ export async function commitSimpleState(
   result.yaml = stringify(applyGlobalBypass(parse(result.yaml), appConfig.dexBypass))
   const active = appConfig.operationMode === 'simple'
   if (!active && !options.allowStandard) throw new Error('请先切换到简易模式')
-  const candidate = path.join(mihomoWorkDir(), '.simple-candidate.yaml')
-  await mkdir(mihomoWorkDir(), { recursive: true })
+  const candidate = path.join(mihomoTestDir(), `.simple-candidate-${randomUUID()}.yaml`)
+  await mkdir(mihomoTestDir(), { recursive: true })
   try {
-    await atomicWriteFile(candidate, result.yaml, { encoding: 'utf8' })
+    await atomicWriteFile(candidate, validationYaml(result.yaml), { encoding: 'utf8' })
     await checkProfileConfig(candidate, appConfig.core, undefined, {
-      workDir: mihomoWorkDir(),
+      workDir: mihomoTestDir(),
+      safePath: mihomoWorkDir(),
       timeoutMs: 30000
     })
   } catch (error) {

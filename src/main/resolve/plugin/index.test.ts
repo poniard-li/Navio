@@ -1330,8 +1330,8 @@ describe('signed discovery: public field rotation (§5b)', () => {
   })
 })
 
-// codex-review round 2 (cpx-v2-hardening-20260907) — login flow / deletion critical section
-describe('R2 login flow and deletion fixes', () => {
+// Login, credential retirement and deletion must keep persisted plugin state consistent.
+describe('plugin login and credential lifecycle', () => {
   interface Vector {
     seedB64: string
     pubKeyB64: string
@@ -1878,8 +1878,8 @@ describe('R2 login flow and deletion fixes', () => {
   })
 })
 
-// codex-review cycle 1 — 修复回归测试
-describe('codex-review fixes', () => {
+// Regression coverage for lifecycle races, discovery state and gateway failures.
+describe('plugin lifecycle and discovery recovery', () => {
   function deferred<T>(): {
     promise: Promise<T>
     resolve: (v: T) => void

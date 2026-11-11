@@ -59,6 +59,14 @@ const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).dige
   if (!isInside(stage, appStage)) throw new Error('Invalid app staging path')
   if (!fss.existsSync(appStage))
     asar.extractAll(path.join(reference, 'resources/app.asar'), appStage)
+  // Keep only runtime directories from the reference; project documentation is copied below.
+  const runtimeDirectories = new Set(['node_modules', 'out', 'resources', 'third-party'])
+  for (const entry of await fs.readdir(appStage, { withFileTypes: true })) {
+    if (entry.isDirectory() && runtimeDirectories.has(entry.name)) continue
+    const target = path.resolve(appStage, entry.name)
+    if (!isInside(appStage, target)) throw new Error('Invalid runtime staging path')
+    await fs.rm(target, { recursive: entry.isDirectory(), force: true })
+  }
   const oldOut = path.join(appStage, 'out')
   if (!isInside(appStage, oldOut)) throw new Error('Invalid out path')
   await fs.rm(oldOut, { recursive: true, force: true })

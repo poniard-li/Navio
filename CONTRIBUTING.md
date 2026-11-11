@@ -19,6 +19,8 @@ pnpm run hooks:install
 
 固定内核和参考运行资源的准备方式见 [DEX-BUILD.txt](DEX-BUILD.txt)。源码快照不携带这些二进制。构建或运行程序前，应按该说明核对资源哈希；不要用浮动的 `latest` 文件替代固定资源。
 
+不要直接编辑 `pnpm-lock.yaml`；依赖变更应通过 pnpm 更新锁文件。不要手工编辑 `extra/sidecar/`、`node_modules/.temp/` 等运行资源或生成目录，应按照构建说明重新准备资源。
+
 ## 检查与提交
 
 每次提交前必须执行并通过：
@@ -28,6 +30,8 @@ pnpm run format:check
 pnpm run lint:check
 pnpm run typecheck
 ```
+
+提交钩子会执行以上三项检查。检查失败时应修复原因并重试；禁止使用 `git commit --no-verify`、`git push --no-verify` 或其他方式绕过钩子。
 
 在 Windows 上运行单元测试：
 

@@ -1,7 +1,6 @@
-import { ChildProcess, execFile, spawn } from 'child_process'
+import { ChildProcess, spawn } from 'child_process'
 import { randomUUID } from 'crypto'
 import { readFile, mkdir, rm, writeFile } from 'fs/promises'
-import { promisify } from 'util'
 import { setTimeout as delay } from 'timers/promises'
 import path from 'path'
 import os from 'os'
@@ -33,6 +32,7 @@ import { parseAgeSecretKeys } from '../utils/age'
 import i18next from '../../shared/i18n'
 import { managerLogger } from '../utils/logger'
 import { createCoreLogWritableStream } from '../utils/logFile'
+import { prepareGeoValidationDirectory, cacheValidatedGeoResources } from '../utils/geo-files'
 import {
   startMihomoTraffic,
   startMihomoConnections,
@@ -49,6 +49,7 @@ import {
 import { generateProfile } from './factory'
 import { syncControlDnsAfterApply, type DnsOverrideGuardResult } from './dnsOverrideGuard'
 import { syncSmartModelToTestDir } from './smartModel'
+import { runProfileCheck } from './check-profile'
 import {
   checkAdminRestartForTun as checkAdminRestartForTunWithRestart,
   getSessionAdminStatus,
@@ -81,7 +82,6 @@ export {
 
 export { getDefaultDevice } from './dns'
 
-const execFilePromise = promisify(execFile)
 const ctlParam = process.platform === 'win32' ? '-ext-ctl-pipe' : '-ext-ctl-unix'
 const coreHookTimeout = 30000
 const automaticRestartDelay = 750
@@ -166,6 +166,19 @@ function runCoreOperation<T>(operation: () => Promise<T>): Promise<T> {
     () => undefined
   )
   return current
+}
+
+/** Resource replacement must not overlap a live core or its prepare/spawn phase. */
+export function withStoppedCoreResources<T>(operation: () => Promise<T>): Promise<T> {
+  return runCoreOperation(async () => {
+    ensureNotShuttingDown()
+    if (hasCoreProcess() || existsSync(path.join(dataDir(), 'core.pid'))) {
+      throw new Error(
+        '内核正在运行，请使用内核自带的数据更新功能；此下载入口适用于内核尚未启动时。'
+      )
+    }
+    return operation()
+  })
 }
 
 function cancelAutomaticRestart(): void {
@@ -1079,6 +1092,8 @@ async function checkProfile(
 
 export interface CheckProfileOptions {
   workDir?: string
+  // Additional local provider directory for isolated validation candidates only.
+  safePath?: string
   // 调用方的预算 signal：中止后校验子进程被终止，校验按失败处理（调用方不得再写入）
   signal?: AbortSignal
   // 校验子进程的硬上限（毫秒）：防止一次 `-t` 无限期占住调用方持有的锁
@@ -1092,20 +1107,37 @@ export async function checkProfileConfig(
   opts: CheckProfileOptions = {}
 ): Promise<void> {
   const corePath = mihomoCorePath(core)
-  await syncSmartModelToTestDir()
+  const checkDir = opts.workDir ?? mihomoTestDir()
 
   try {
-    await execFilePromise(
+    await runProfileCheck({
       corePath,
-      ['-t', '-f', configPath, '-d', opts.workDir ?? mihomoTestDir()],
-      {
-        env: buildCoreEnv(undefined, ageSecretKey),
-        signal: opts.signal,
-        timeout: opts.timeoutMs
+      configPath,
+      workDir: checkDir,
+      env: buildCoreEnv(opts.safePath, ageSecretKey),
+      signal: opts.signal,
+      timeoutMs: opts.timeoutMs,
+      prepare: async () => {
+        await prepareGeoValidationDirectory(checkDir, mihomoWorkDir())
+        await syncSmartModelToTestDir(checkDir)
+      },
+      afterSuccess: async () => {
+        try {
+          await cacheValidatedGeoResources(checkDir, mihomoWorkDir())
+        } catch (error) {
+          managerLogger.warn('Could not cache validated Geo resources', error)
+        }
       }
-    )
+    })
   } catch (error) {
     managerLogger.error('Profile check failed', error)
+
+    if (error instanceof Error && error.name === 'TimeoutError') {
+      throw new Error('配置检查超时，请检查网络和规则数据库来源后重试。', { cause: error })
+    }
+    if (error instanceof Error && error.name === 'AbortError') {
+      throw new Error('配置检查已取消。', { cause: error })
+    }
 
     if (error instanceof Error && 'stdout' in error) {
       const { stdout, stderr } = error as { stdout: string; stderr?: string }
@@ -1131,6 +1163,7 @@ export async function checkProfileConfig(
           allLines.length > 0
             ? allLines
             : (stderr ?? '').split('\n').filter((line) => line.trim().length > 0)
+        if (detailLines.length === 0) detailLines.push(error.message)
         throw new Error(
           `${i18next.t('mihomo.error.profileCheckFailed')}:\n${detailLines.join('\n')}`
         )

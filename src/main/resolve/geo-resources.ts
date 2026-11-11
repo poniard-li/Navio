@@ -1,8 +1,13 @@
-import { existsSync } from 'fs'
 import { mkdir } from 'fs/promises'
 import path from 'path'
 import { getControledMihomoConfig } from '../config'
+import { withProfileCheckLock } from '../core/check-profile'
 import { mihomoTestDir, mihomoWorkDir } from '../utils/dirs'
+import {
+  getMissingGeoResources,
+  isGeoResourceComplete,
+  MAX_GEO_RESOURCE_BYTES
+} from '../utils/geo-files'
 import { atomicWriteFile } from '../utils/safeFile'
 import { defaultControledMihomoConfig } from '../utils/template'
 import { fetchReleaseAsset } from './release-download'
@@ -13,20 +18,18 @@ const resources = [
   { key: 'asn', file: 'ASN.mmdb' },
   { key: 'geosite', file: 'geosite.dat' }
 ] as const
-const maxBytes = 128 * 1024 * 1024
 let activeDownload: Promise<void> | undefined
 
 export async function getGeoResourceStatus(): Promise<string[]> {
-  return resources
-    .filter(({ file }) => !existsSync(path.join(mihomoWorkDir(), file)))
-    .map(({ file }) => file)
+  return getMissingGeoResources(mihomoWorkDir())
 }
 
 async function download(): Promise<void> {
+  const { withStoppedCoreResources } = await import('../core/manager')
+  await withStoppedCoreResources(async () => {})
   const config = await getControledMihomoConfig()
   const urls = { ...defaultControledMihomoConfig['geox-url'], ...config['geox-url'] }
-  const directories = [mihomoWorkDir(), mihomoTestDir()]
-  await Promise.all(directories.map((dir) => mkdir(dir, { recursive: true })))
+  const downloaded: { file: string; data: Buffer }[] = []
   for (const { key, file } of resources) {
     const url = new URL(urls[key] || '')
     if (url.protocol !== 'https:' || url.username || url.password)
@@ -35,8 +38,9 @@ async function download(): Promise<void> {
     if (!response.ok || !response.body)
       throw new Error(`${file} 下载失败（${response.status}），请检查网络与资源地址。`)
     const contentType = response.headers.get('content-type') || ''
-    const length = Number(response.headers.get('content-length') || 0)
-    if (/text\/html|application\/json/i.test(contentType) || length > maxBytes) {
+    const lengthHeader = response.headers.get('content-length')
+    const length = Number(lengthHeader || 0)
+    if (/text\/html|application\/json/i.test(contentType) || length > MAX_GEO_RESOURCE_BYTES) {
       await response.body.cancel()
       throw new Error(`${file} 返回的不是有效数据库，原有文件未更改。`)
     }
@@ -48,18 +52,31 @@ async function download(): Promise<void> {
         const { done, value } = await reader.read()
         if (done) break
         size += value.byteLength
-        if (size > maxBytes) throw new Error(`${file} 超过 128 MB 限制。`)
+        if (size > MAX_GEO_RESOURCE_BYTES) throw new Error(`${file} 超过 128 MB 限制。`)
         chunks.push(value)
       }
     } finally {
       await reader.cancel().catch(() => {})
     }
     const data = Buffer.concat(chunks)
-    if (data.length < 1024 || /^\s*</.test(data.subarray(0, 100).toString('utf8')))
-      throw new Error(`${file} 内容无效，原有文件未更改。`)
-    // No core start, proxy changes, account tokens or subscription credentials are involved.
-    for (const dir of directories) await atomicWriteFile(path.join(dir, file), data)
+    if (lengthHeader && !response.headers.get('content-encoding') && data.length !== length)
+      throw new Error(`${file} 下载不完整，请重试；原有文件未更改。`)
+    if (!isGeoResourceComplete(file, data))
+      throw new Error(`${file} 内容无效或下载不完整，原有文件未更改。`)
+    downloaded.push({ file, data })
   }
+  // Validate the entire batch before changing any existing resource.
+  await withStoppedCoreResources(() =>
+    withProfileCheckLock(mihomoTestDir(), async () => {
+      await mkdir(mihomoWorkDir(), { recursive: true })
+      await mkdir(mihomoTestDir(), { recursive: true })
+      for (const { file, data } of downloaded) {
+        // No core start, proxy changes, account tokens or subscription credentials are involved.
+        await atomicWriteFile(path.join(mihomoWorkDir(), file), data)
+        await atomicWriteFile(path.join(mihomoTestDir(), file), data)
+      }
+    })
+  )
 }
 
 export function downloadGeoResources(): Promise<void> {
