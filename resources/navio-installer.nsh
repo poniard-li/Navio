@@ -1,6 +1,67 @@
 !include LogicLib.nsh
 !define NAVIO_INSTALLER_SOURCE_DIR "${__FILEDIR__}"
 
+!ifndef BUILD_UNINSTALLER
+  !ifndef NAVIO_PAYLOAD_MANIFEST
+    !error "Build Navio installers with scripts/release-windows.cjs so the payload is verified."
+  !endif
+!endif
+
+!macro NavioInstallFailure MESSAGE
+  MessageBox MB_OK|MB_ICONSTOP "安装未完成。${MESSAGE}$\r$\n$\r$\nInstallation stopped. Free disk space or check the reported error, then retry. Existing user data is retained." /SD IDOK
+  SetErrorLevel 3
+  Quit
+!macroend
+
+!macro NavioRunSafety MODE
+  ReadRegStr $R2 HKCU "${INSTALL_REGISTRY_KEY}" InstallLocation
+  System::Call 'kernel32::SetEnvironmentVariable(t "NAVIO_INSTALL_MODE", t "${MODE}")'
+  System::Call 'kernel32::SetEnvironmentVariable(t "NAVIO_INSTALL_HELPER", t "$PLUGINSDIR\navio-install.ps1")'
+  System::Call 'kernel32::SetEnvironmentVariable(t "NAVIO_INSTALL_MANIFEST", t "$PLUGINSDIR\navio-payload.json")'
+  System::Call 'kernel32::SetEnvironmentVariable(t "NAVIO_INSTALL_STAGE", t "$PLUGINSDIR\navio-payload")'
+  System::Call 'kernel32::SetEnvironmentVariable(t "NAVIO_INSTALL_TEMP", t "$PLUGINSDIR")'
+  System::Call 'kernel32::SetEnvironmentVariable(t "NAVIO_INSTALL_TARGET", t "$INSTDIR")'
+  System::Call 'kernel32::SetEnvironmentVariable(t "NAVIO_INSTALL_EXE", t "$EXEPATH")'
+  System::Call 'kernel32::SetEnvironmentVariable(t "NAVIO_INSTALL_OLD", t "$R2")'
+  nsExec::ExecToStack /TIMEOUT=600000 `"$SYSDIR\WindowsPowerShell\v1.0\powershell.exe" -NoLogo -NoProfile -NonInteractive -WindowStyle Hidden -Command "& ([scriptblock]::Create([IO.File]::ReadAllText([Environment]::GetEnvironmentVariable('NAVIO_INSTALL_HELPER'))))"`
+  Pop $R0
+  Pop $R1
+  ${If} $R0 != 0
+    DetailPrint "$R1"
+    !insertmacro NavioInstallFailure "$R1"
+  ${EndIf}
+!macroend
+
+!macro NavioPreparePayload
+  !ifndef APP_64
+    !error "Navio installer safety currently supports the offline x64 payload only."
+  !endif
+  !ifdef ZIP_COMPRESSION
+    !error "Navio installer safety requires a 7z payload."
+  !endif
+  InitPluginsDir
+  ClearErrors
+  File /oname=$PLUGINSDIR\navio-install.ps1 "${NAVIO_SAFETY_HELPER}"
+  File /oname=$PLUGINSDIR\navio-payload.json "${NAVIO_PAYLOAD_MANIFEST}"
+  ${If} ${Errors}
+    !insertmacro NavioInstallFailure "Unable to prepare verification files in the temporary directory."
+  ${EndIf}
+  !insertmacro NavioRunSafety "Preflight"
+  ClearErrors
+  File /oname=$PLUGINSDIR\navio-payload.7z "${APP_64}"
+  ${If} ${Errors}
+    !insertmacro NavioInstallFailure "Unable to write the temporary application archive."
+  ${EndIf}
+  Push $OUTDIR
+  CreateDirectory "$PLUGINSDIR\navio-payload"
+  SetOutPath "$PLUGINSDIR\navio-payload"
+  Nsis7z::Extract "$PLUGINSDIR\navio-payload.7z"
+  Pop $R0
+  SetOutPath $R0
+  # Nsis7z may return without reporting a short write. Verify every file before uninstalling anything.
+  !insertmacro NavioRunSafety "VerifyStage"
+!macroend
+
 !macro NavioValidateTarget
   ${If} ${FileExists} "$INSTDIR\PORTABLE"
   ${OrIf} ${FileExists} "$INSTDIR\DEX-STUDIO-NEXT"
@@ -48,6 +109,10 @@
       SetErrorLevel 2
       Quit
     ${EndIf}
+  !ifndef BUILD_UNINSTALLER
+    !include "${NAVIO_EXTRACTION_OVERRIDE}"
+    !insertmacro NavioPreparePayload
+  !endif
 !macroend
 
 !macro customUnInstall

@@ -2,7 +2,7 @@
 
 Built by D.E.X Studio · Windows x64 · Public Beta（公测版）
 
-当前客户端版本：`0.6.0-beta.3`。安装版、免安装版和对应源码见 [GitHub Releases](https://github.com/poniard-li/Navio/releases)。
+当前客户端版本：`0.6.0-beta.4`。安装版、免安装版和对应源码见 [GitHub Releases](https://github.com/poniard-li/Navio/releases)。
 
 Navio 基于 Clash Party 2.0.4 客户端与 Mihomo 内核开发。上游及第三方来源见 [鸣谢与许可说明](DEX-THIRD-PARTY-NOTICES.txt)，客户端遵循 [GPL-3.0-only](LICENSE)。
 

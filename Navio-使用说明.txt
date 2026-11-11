@@ -4,6 +4,7 @@ Built by D.E.X Studio · Windows x64
 发布与运行
 从 https://github.com/poniard-li/Navio/releases 获取与版本对应的完整程序和源码。
 安装版：运行 setup.exe，按提示选择安装目录。安装前请从托盘退出正在运行的 Navio；不要选用旧版免安装程序所在目录。
+安装器会使用 Windows 临时目录解压，通常位于 C 盘。即使安装到其他盘，临时盘也需要足够空间；空间不足或文件校验失败时，请按提示处理后重新安装。
 免安装版：解压完整 portable.zip 后运行 Navio.exe，不要只移动 exe。
 账号 API 默认使用 https://navio.mydex.top。注册、登录、找回密码和账号管理均在软件内完成。
 

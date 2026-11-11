@@ -30,4 +30,4 @@ jobs:
       - name: Windows unit tests
         run: pnpm exec vitest run --exclude src/main/utils/app-info/linux.test.ts
       - name: Windows packaging checks
-        run: node --test scripts/release-windows.test.cjs
+        run: node --test scripts/release-windows.test.cjs scripts/release-windows-safety.test.cjs

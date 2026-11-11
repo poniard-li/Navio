@@ -2,6 +2,7 @@ const fs = require('node:fs/promises')
 const path = require('node:path')
 const crypto = require('node:crypto')
 const { spawnSync } = require('node:child_process')
+const { createInstallerSafetyFiles } = require('./release-windows-safety.cjs')
 
 const projectRoot = path.resolve(__dirname, '..')
 
@@ -47,7 +48,7 @@ async function validatePaths(referenceArg, outputArg, workArg) {
   return { reference, output, work }
 }
 
-function builderConfig(output, version) {
+function builderConfig(output, version, safetyInclude) {
   return {
     appId: 'studio.dex.desktop',
     productName: 'Navio',
@@ -62,7 +63,7 @@ function builderConfig(output, version) {
       artifactName: `Navio-v${version}-Windows-x64-portable.zip`
     },
     nsis: {
-      include: path.join(projectRoot, 'resources/navio-installer.nsh'),
+      include: safetyInclude || path.join(projectRoot, 'resources/navio-installer.nsh'),
       artifactName: `Navio-v${version}-Windows-x64-setup.exe`,
       oneClick: false,
       perMachine: false,
@@ -70,7 +71,9 @@ function builderConfig(output, version) {
       createDesktopShortcut: 'always',
       deleteAppDataOnUninstall: false,
       runAfterFinish: false,
-      packElevateHelper: false
+      packElevateHelper: false,
+      useZip: false,
+      preCompressedFileExtensions: []
     }
   }
 }
@@ -126,7 +129,8 @@ async function main(args) {
     }
   }
   const { build, Platform, Arch } = require('electron-builder')
-  const config = builderConfig(artifacts, pkg.version)
+  const safety = await createInstallerSafetyFiles(installer, path.join(work, 'installer-safety'))
+  const config = builderConfig(artifacts, pkg.version, safety.includePath)
   await build({
     projectDir: projectRoot,
     prepackaged: installer,
