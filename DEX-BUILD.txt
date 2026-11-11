@@ -1,0 +1,47 @@
+D.E.X STUDIO — Windows 预览版构建说明
+
+工程来源与构建目标
+本工程基于用户提供的 Clash Party 2.0.4 源码进行 D.E.X STUDIO 品牌、交互和隔离改造。客户端保留完整功能基座与上游 LICENSE。当前目标是 Windows 预览版，不代表 macOS/Linux 发行版已完成适配和验证。
+
+内核采用固定稳定版 Mihomo v1.19.32，使用已解压便携包中的原样二进制。D.E.X STUDIO 没有将该内核宣称为自行开发或修改过的内核；不要把本工程当作 2023 年 CFW clash.exe 的直接替换壳。更换内核版本或文件后需要重新记录来源、校验值并进行兼容性验证。
+
+源码包内容
+源码包保留客户端源文件、锁文件、构建脚本、上游 LICENSE 与本说明。
+源码包不包含 node_modules、extra、out；它们分别是安装依赖、运行资源和编译结果。
+
+构建准备
+1. 在 Windows 上准备 Node.js、pnpm，并将源码包解压到可写目录。
+2. 准备用户提供的 Clash Party 便携程序解压目录。确认其中 resources/files 与 resources/sidecar 存在；Mihomo 固定版本及来源以随交付提供的实际版本/校验记录为准。
+3. 安装锁定依赖，不运行安装生命周期脚本：
+
+   pnpm install --ignore-scripts --frozen-lockfile
+
+4. 将该便携程序的 resources/files 与 resources/sidecar 分别复制到本工程 extra/files 与 extra/sidecar，保留目录结构和资源原内容。
+5. 编译客户端：
+
+   pnpm exec electron-vite build
+
+6. 运行固定资源打包脚本；下面三个参数依次是便携程序解压目录、新产物目录、工作暂存目录，均建议使用绝对路径：
+
+   node scripts/package-pinned.cjs "<已解压Party便携目录>" "<新产物目录>" "<工作暂存目录>"
+
+不得将原参考程序目录本身作为新产物目录。以脚本的输入检查和最终执行结果为准；本说明记录构建接口，不以存在脚本代替一次成功构建。
+
+固定资源策略
+此流程不执行上游 prepare 下载步骤，不自动拉取 latest/alpha 或随时间变化的内核。extra 资源来自上述已解压 resources/{files,sidecar}。不要改用会自动触发下载的上游构建/prepare 命令来替代这里的固定资源流程。需要更新依赖时通过 pnpm 更新锁文件；需要更新内核时另行选择明确版本并保存来源和校验记录。
+
+默认身份与运行设置
+• 应用品牌：D.E.X STUDIO；协议：dexstudio://。
+• 常规用户数据：%APPDATA%\DEX-STUDIO-NEXT；开发运行也不读取 Party 数据。
+• 便携数据：程序同级 DEX-STUDIO-NEXT；不复用上游 data 文件夹。
+• DEX_USER_DATA 可指定独立验证目录，并优先于常规/便携数据路径。
+• 默认混合端口 17890、SOCKS 端口 17891、HTTP 端口 17892。
+• 初始完整标准模式；sysProxy.enable=false、tun.enable=false、allow-lan=false。
+• 初始 autoCheckUpdate=false、silentUpdate=false；应用更新与订阅更新是不同设置。
+
+验证注意
+DEX_TEST_MODE=1 可跳过托盘、协议注册以及部分启动后台流程，便于隔离预览。代理、TUN 和权限请求本身仍走真实实现，不会伪造成功。
+建议 smoke 使用空 DEX_USER_DATA；避免外网自动任务时另设 useSubStore=false、autoUpdateProfileOnStart=false、showTraffic=false，不进入网络检测页。
+单元测试中的 OS 接口使用 mock；真实订阅、TUN、路由、系统代理与自启动仍需要在明确的目标环境验证。进程清理的定向测试与静态检查仅证明所覆盖的路径，不能作为已消除所有跨客户端影响的保证。预览不等于所有部署场景已验收。
+
+来源与再分发材料请同时阅读 DEX-THIRD-PARTY-NOTICES.txt、LICENSE，以及包内其他组件许可文件。

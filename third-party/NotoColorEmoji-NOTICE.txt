@@ -1,0 +1,18 @@
+Noto Color Emoji
+
+Copyright 2022 Google Inc.
+The font is licensed under the SIL Open Font License, Version 1.1.
+The complete license is provided in NotoColorEmoji-OFL.txt.
+
+Font examined in the Navio 0.3, 0.4 and 0.5 historical source archives:
+src/renderer/src/assets/NotoColorEmoji.ttf
+Embedded version: Version 2.057;GOOG;noto-emoji:20260911:fc4ca365e7c20e78278ae702aa20434bfe704c8f
+Embedded name-table license identifier: SIL Open Font License, Version 1.1.
+Official project: https://github.com/googlefonts/noto-emoji
+Official license text: https://github.com/googlefonts/noto-emoji/blob/main/LICENSE
+
+Audit note: the embedded commit could not be resolved at the official raw
+LICENSE and 2D/LICENSE URLs on 2026-11-11. The adjacent full OFL text was
+retrieved from the official main branch; the historical font's own embedded
+copyright and license statement are retained above. This does not claim that
+the current repository HEAD is the font's original build commit.

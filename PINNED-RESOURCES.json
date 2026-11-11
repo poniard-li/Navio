@@ -1,0 +1,37 @@
+{
+  "product": "D.E.X STUDIO",
+  "version": "0.3.0-preview.1",
+  "upstreamClient": "Clash Party 2.0.4",
+  "stableCore": "Mihomo v1.19.32",
+  "sourceRuntimeAsarSha256": "801ad4a2dfd770ae4007879d8cf2d5e4f19dbfc92b02703b30b908f846e75abe",
+  "sidecars": [
+    {
+      "file": "mihomo-alpha.exe",
+      "sha256": "d0bbd5ded1b90e993819022d51b9cafe6fc982b181ce474ab6099cf07d9f013c"
+    },
+    {
+      "file": "mihomo-smart.exe",
+      "sha256": "b7570c9a23665e24325b0e5ed1dbb211c10fadf5f63cb9e3a0a102ff7f960558"
+    },
+    {
+      "file": "mihomo.exe",
+      "sha256": "04f8d7fc2b314771e1ecbf15951d59f0e1cb7914503c88cfb6972ff6a824e314"
+    },
+    {
+      "file": "sysproxy.win32-x64-msvc.node",
+      "sha256": "f292cf74413c8eaaf9d6d6ed95eec110226394f9a6c11ec00a749a830ddf7217"
+    }
+  ],
+  "optionalCores": [
+    {
+      "file": "mihomo-alpha.exe",
+      "reportedVersion": "alpha-94b13ae",
+      "source": "https://github.com/MetaCubeX/mihomo/tree/94b13ae"
+    },
+    {
+      "file": "mihomo-smart.exe",
+      "reportedVersion": "alpha-smart-83e67d0",
+      "source": "https://github.com/vernesong/mihomo/tree/83e67d0"
+    }
+  ]
+}

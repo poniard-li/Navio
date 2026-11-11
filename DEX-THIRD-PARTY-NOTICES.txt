@@ -1,0 +1,45 @@
+D.E.X STUDIO — 第三方来源与修改说明
+
+客户端基座：Clash Party 2.0.4
+本工程基于用户提供的 Clash Party 2.0.4 源码，沿用其完整客户端功能基座。上游 LICENSE 为 GNU General Public License version 3（GPL-3.0）；本源码包保留上游 LICENSE 原文和源文件中的相关声明。
+
+上游项目：
+https://github.com/mihomo-party-org/clash-party
+2.0.4 对应源码：
+https://github.com/mihomo-party-org/clash-party/tree/v2.0.4
+上游许可原文：
+https://github.com/mihomo-party-org/clash-party/blob/v2.0.4/LICENSE
+
+D.E.X STUDIO 的本次修改
+本派生工程修改了品牌与部分交互、主题入口、独立数据目录和协议、默认运行设置、系统代理接管/恢复、进程隔离以及 Windows 固定资源构建流程。具体修改以所提供的对应源文件为准。
+D.E.X STUDIO 是本派生版本的品牌；这一名称不表示 Clash Party 客户端、Mihomo 内核或全部第三方组件均由 D.E.X 原创。上游名称在来源与版权说明中的保留属于必要的出处记录。
+
+内核：Mihomo v1.19.32
+Windows 预览版使用固定稳定版 Mihomo v1.19.32 的原样二进制，来自用户提供并解压的便携程序资源。本次没有修改或自行重新实现 Mihomo 内核，也不宣称它是 D.E.X 自研内核。
+该内核属于 Mihomo / Clash Meta 系列，与用户原始 CFW 0.20.39 档案中的 2023 年 Clash 核心不是同一二进制；配置、API 和行为不能一概视为完全兼容。
+
+内核上游与对应版本来源：
+https://github.com/MetaCubeX/mihomo
+https://github.com/MetaCubeX/mihomo/releases/tag/v1.19.32
+https://github.com/MetaCubeX/mihomo/tree/v1.19.32
+该版本许可原文：
+https://github.com/MetaCubeX/mihomo/blob/v1.19.32/LICENSE
+
+其他运行资源与依赖
+extra/files、extra/sidecar 来自已解压便携程序中的 resources/files、resources/sidecar，按固定资源方式复制。Electron、Node.js 依赖、原生模块、GeoIP/规则数据、图标及其他资源各有自己的来源或条款；应保留包内现有 LICENSE、NOTICE、版权和数据来源材料。本说明不将它们统一声明为 D.E.X 自有资产，也不替代各组件许可原文。
+
+对应源代码与公开分发
+本源码包内置客户端 GPL 许可原文，保留上游声明与 D.E.X 修改后的客户端源码。公开分发派生客户端和捆绑内核时，需要按实际适用许可保留声明，并提供与所分发二进制对应的源代码及必要构建材料；不能只保留 D.E.X 品牌、去除来源，或用上游主页替代对本派生修改的对应源码提供。
+
+工程维护者应让每个发行包对应明确的客户端源码版本、构建材料、内核版本和校验记录，并将相应源码获取方式随发行物提供。本项目中的源码与上述精确版本链接是来源记录的一部分；最终发行物采用的版本、组件和实际提供方式仍须保持一致。
+
+当前范围
+当前为 Windows 预览版。没有声明真实 TUN、自启动、全部订阅供应商以及 macOS/Linux 的部署组合均已验证。构建方式与默认独立数据/端口设置见 DEX-BUILD.txt；面向使用者的迁移差异见交付目录中的 DEX-v0.3-功能与迁移说明.txt。
+
+随包保留的可选内核
+默认启动与本轮真实转发验证采用稳定版。另保留原便携包的 mihomo-alpha.exe（alpha-94b13ae）及 mihomo-smart.exe（alpha-smart-83e67d0），供高级用户在原有内核功能中选择；本轮没有对这两个可选版本做完整运行验收。文件 SHA-256 见 PINNED-RESOURCES.json / DEX-BUILD-MANIFEST.json。对应来源：
+https://github.com/MetaCubeX/mihomo/tree/94b13ae
+https://github.com/vernesong/mihomo/tree/83e67d0
+
+字体：Noto Color Emoji 来自参考便携包，保留其字体名称；项目来源 https://github.com/googlefonts/noto-emoji ，使用 SIL Open Font License 1.1。
+主题服务：theme-service/ 保留前一版 D.E.X JSON 服务器及手动部署材料，本轮只在本机临时服务器完成上传/读取联调，未部署阿里云。

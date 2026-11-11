@@ -1,0 +1,206 @@
+import { existsSync, mkdirSync } from 'fs'
+import path from 'path'
+import { is } from '@electron-toolkit/utils'
+import { app } from 'electron'
+
+export const homeDir = app.getPath('home')
+
+export function isPortable(): boolean {
+  return existsSync(path.join(exeDir(), 'PORTABLE'))
+}
+
+function portableDataDir(): string {
+  return path.join(exeDir(), 'DEX-STUDIO-NEXT')
+}
+
+// Every build uses the DEX identity. Never inherit the reference client's data,
+// including a neighbouring portable `data` directory.
+export function configureAppPaths(): void {
+  app.setName('D.E.X STUDIO')
+  const override = process.env.DEX_USER_DATA?.trim()
+  app.setPath(
+    'userData',
+    override
+      ? path.resolve(override)
+      : isPortable()
+        ? portableDataDir()
+        : path.join(app.getPath('appData'), 'DEX-STUDIO-NEXT')
+  )
+}
+
+export function dataDir(): string {
+  return app.getPath('userData')
+}
+
+export function taskDir(): string {
+  const baseDir = dataDir()
+  if (!existsSync(baseDir)) {
+    mkdirSync(baseDir, { recursive: true })
+  }
+
+  const dir = path.join(baseDir, 'tasks')
+  if (!existsSync(dir)) {
+    mkdirSync(dir, { recursive: true })
+  }
+  return dir
+}
+
+export function subStoreDir(): string {
+  return path.join(dataDir(), 'substore')
+}
+
+export function exeDir(): string {
+  return path.dirname(exePath())
+}
+
+export function exePath(): string {
+  return app.getPath('exe')
+}
+
+export function resourcesDir(): string {
+  if (is.dev) {
+    return path.join(__dirname, '../../extra')
+  } else {
+    if (app.getAppPath().endsWith('asar')) {
+      return process.resourcesPath
+    } else {
+      return path.join(app.getAppPath(), 'resources')
+    }
+  }
+}
+
+export function resourcesFilesDir(): string {
+  return path.join(resourcesDir(), 'files')
+}
+
+export function themesDir(): string {
+  return path.join(dataDir(), 'themes')
+}
+
+export function mihomoCoreDir(): string {
+  return path.join(resourcesDir(), 'sidecar')
+}
+
+export function mihomoCorePath(core: string): string {
+  const isWin = process.platform === 'win32'
+  // 处理 Smart 内核
+  if (core === 'mihomo-smart') {
+    return path.join(mihomoCoreDir(), `mihomo-smart${isWin ? '.exe' : ''}`)
+  }
+  return path.join(mihomoCoreDir(), `${core}${isWin ? '.exe' : ''}`)
+}
+
+export function appConfigPath(): string {
+  return path.join(dataDir(), 'config.yaml')
+}
+
+export function trafficUsageDatabasePath(): string {
+  return path.join(dataDir(), 'traffic-usage.db')
+}
+
+export function controledMihomoConfigPath(): string {
+  return path.join(dataDir(), 'mihomo.yaml')
+}
+
+export function profileConfigPath(): string {
+  return path.join(dataDir(), 'profile.yaml')
+}
+
+export function profilesDir(): string {
+  return path.join(dataDir(), 'profiles')
+}
+
+export function profilePath(id: string): string {
+  return path.join(profilesDir(), `${id}.yaml`)
+}
+
+export function pluginConfigPath(): string {
+  return path.join(dataDir(), 'plugin.yaml')
+}
+
+export function pluginVaultDir(): string {
+  return path.join(dataDir(), 'plugin-vault')
+}
+
+export function pluginVaultPath(id: string): string {
+  return path.join(pluginVaultDir(), `${id}.bin`)
+}
+
+export function overrideDir(): string {
+  return path.join(dataDir(), 'override')
+}
+
+export function overrideConfigPath(): string {
+  return path.join(dataDir(), 'override.yaml')
+}
+
+export function overridePath(id: string, ext: 'js' | 'yaml' | 'log'): string {
+  return path.join(overrideDir(), `${id}.${ext}`)
+}
+
+export function mihomoWorkDir(): string {
+  return path.join(dataDir(), 'work')
+}
+
+export function mihomoProfileWorkDir(id: string | undefined): string {
+  return path.join(mihomoWorkDir(), id || 'default')
+}
+
+export function mihomoTestDir(): string {
+  return path.join(dataDir(), 'test')
+}
+
+export function mihomoWorkConfigPath(id: string | undefined): string {
+  if (id === 'work') {
+    return path.join(mihomoWorkDir(), 'config.yaml')
+  } else {
+    return path.join(mihomoProfileWorkDir(id), 'config.yaml')
+  }
+}
+
+export function simpleConfigPath(): string {
+  return path.join(dataDir(), 'simple-config.yaml')
+}
+
+export function simpleOutputPath(): string {
+  return path.join(dataDir(), 'simple-config.generated.yaml')
+}
+
+export function logDir(): string {
+  return path.join(dataDir(), 'logs')
+}
+
+export function logPath(): string {
+  const date = new Date()
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const name = `dex-studio-${year}-${month}-${day}`
+  return path.join(logDir(), `${name}.log`)
+}
+
+export function substoreLogPath(): string {
+  const date = new Date()
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const name = `sub-store-${year}-${month}-${day}`
+  return path.join(logDir(), `${name}.log`)
+}
+
+export function coreLogPath(): string {
+  const date = new Date()
+  const year = date.getFullYear()
+  const month = String(date.getMonth() + 1).padStart(2, '0')
+  const day = String(date.getDate()).padStart(2, '0')
+  const name = `core-${year}-${month}-${day}`
+  return path.join(logDir(), `${name}.log`)
+}
+
+export function rulesDir(): string {
+  return path.join(dataDir(), 'rules')
+}
+
+export function rulePath(id: string): string {
+  return path.join(rulesDir(), `${id}.yaml`)
+}
