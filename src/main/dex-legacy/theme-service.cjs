@@ -153,8 +153,8 @@ class ThemeService {
     await this.ready
     if (!this.dialog) throw new Error('本地文件对话框不可用')
     const options = {
-      title: '导入 D.E.X 主题',
-      filters: [{ name: 'D.E.X 主题 JSON', extensions: ['json'] }],
+      title: '导入 Navio 主题',
+      filters: [{ name: 'Navio 主题 JSON', extensions: ['json'] }],
       properties: ['openFile']
     }
     const window = this.getWindow()
@@ -179,9 +179,9 @@ class ThemeService {
     const theme = await this.find(id)
     if (!this.dialog) throw new Error('本地文件对话框不可用')
     const options = {
-      title: '导出 D.E.X 主题',
+      title: '导出 Navio 主题',
       defaultPath: `${theme.id}.json`,
-      filters: [{ name: 'D.E.X 主题 JSON', extensions: ['json'] }]
+      filters: [{ name: 'Navio 主题 JSON', extensions: ['json'] }]
     }
     const window = this.getWindow()
     const result = await (window

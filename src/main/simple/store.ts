@@ -18,6 +18,7 @@ import {
   type SimpleState,
   type SimplePreview
 } from '../../shared/simple-config'
+import { applyGlobalBypass } from '../../shared/dex-bypass'
 import { compileSimpleConfig, type SimpleSharedConfig } from './compiler'
 import { resolveSimpleDraft } from './subscriptions'
 import {
@@ -101,6 +102,8 @@ export async function compileAndWriteSimple(
     effectiveShared
   )
   if (result.errors.length) return result
+  const { getAppConfig } = await import('../config/app')
+  result.yaml = stringify(applyGlobalBypass(parse(result.yaml), (await getAppConfig()).dexBypass))
   await mkdir(mihomoWorkDir(), { recursive: true })
   await atomicWriteFile(simpleOutputPath(), result.yaml, { encoding: 'utf8' })
   await atomicWriteFile(mihomoWorkConfigPath('work'), result.yaml, { encoding: 'utf8' })
@@ -148,6 +151,7 @@ export async function commitSimpleState(
     import('../core/mihomoApi')
   ])
   const appConfig = await getAppConfig()
+  result.yaml = stringify(applyGlobalBypass(parse(result.yaml), appConfig.dexBypass))
   const active = appConfig.operationMode === 'simple'
   if (!active && !options.allowStandard) throw new Error('请先切换到简易模式')
   const candidate = path.join(mihomoWorkDir(), '.simple-candidate.yaml')

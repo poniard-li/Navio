@@ -1,4 +1,5 @@
 import { TitleBarOverlayOptions } from 'electron'
+import type { NetworkIPInfo } from '../../../shared/network-info'
 import type {
   TrafficUsageAggregate,
   TrafficUsageBreakdownQuery,
@@ -265,7 +266,7 @@ interface IpcApi {
   getGistUrl: () => Promise<string>
   generateGistAgeKeyPair: () => Promise<{ secretKey: string; recipient: string }>
   exportGistAgeSecretKey: () => Promise<boolean>
-  fetchIPInfo: (url: string) => Promise<unknown>
+  fetchIPInfo: (url: string) => Promise<NetworkIPInfo>
   measureLatency: (url: string) => Promise<number | null>
   getImageDataURL: (url: string) => Promise<string>
   relaunchApp: () => Promise<void>

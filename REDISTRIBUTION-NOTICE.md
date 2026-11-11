@@ -1,7 +1,7 @@
 # Historical Public Beta redistribution
 
-Public tag: v0.3.0-beta.1. Original internal version: 0.3.0-preview.1.
-原始包 SHA256：`ea6da17f04749aa6a1e10c48f09b1460ed1ec040fb2b1cfb76fbe0492ce49e66`。
+Public tag: v0.4.0-beta.1. Original internal version: 0.4.0-preview.1.
+原始包 SHA256：`9b86689a24d2fa18addf4f6390d901cd4d5a5034ecf59ca091570b0d0a85df7f`。
 
 此分发副本只移除六个历史数据文件（ASN.mmdb、country.mmdb、geoip.dat、geoip.metadb、geosite.dat、BundleMRS.7z），并添加许可证、对应源码说明和本记录。程序 app.asar、启动器、三套内核及其他原文件保持字节不变，原始 ZIP 未修改。旧内部名和 preview 版本不代表一个额外的新功能版本。
 

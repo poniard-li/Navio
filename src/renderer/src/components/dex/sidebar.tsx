@@ -4,6 +4,7 @@ import {
   LuActivity,
   LuArrowDownUp,
   LuBlocks,
+  LuBookOpen,
   LuChevronDown,
   LuChevronRight,
   LuCpu,
@@ -37,6 +38,7 @@ import MihomoIcon from '../base/mihomo-icon'
 import OutboundModeSwitcher from '../sider/outbound-mode-switcher'
 import SysproxySwitcher from '../sider/sysproxy-switcher'
 import TunSwitcher from '../sider/tun-switcher'
+import { PRODUCT_NAME } from '../../../../shared/product'
 
 export interface NavigationItem {
   path: string
@@ -83,6 +85,14 @@ export const navigationGroups: {
         english: 'Connections',
         keywords: '连接活动 进程 实时 connections process',
         icon: LuActivity
+      },
+      {
+        path: '/bypass',
+        key: 'dex.bypass',
+        fallback: '直连例外',
+        english: 'Direct exceptions',
+        keywords: '全局 微信 抖音 应用 网站 绕过 直连 bypass global exceptions',
+        icon: LuShieldCheck
       },
       {
         path: '/rules',
@@ -212,6 +222,14 @@ export const navigationGroups: {
 
 export const utilityItems: NavigationItem[] = [
   {
+    path: '/help',
+    key: 'dex.help',
+    fallback: '使用指南',
+    english: 'Help',
+    keywords: '帮助 解释 术语 隐私 新手 ISP ASN Smart 引导 help guide privacy',
+    icon: LuBookOpen
+  },
+  {
     path: '/dex-themes',
     key: 'dex.themes',
     fallback: '主题工坊',
@@ -248,6 +266,7 @@ export default function DexSidebar({
   const { pathname } = useLocation()
   const navigate = useNavigate()
   const [query, setQuery] = useState('')
+  const [showAdvanced, setShowAdvanced] = useState(false)
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ workspace: true })
   const searchRef = useRef<HTMLInputElement>(null)
   const navigationRef = useRef<HTMLElement>(null)
@@ -267,6 +286,22 @@ export default function DexSidebar({
   const filteredItems = allItems.filter(matches)
   const selectedProfile = profileConfig?.items?.find((item) => item.id === profileConfig.current)
   const simpleMode = appConfig?.operationMode === 'simple'
+  const simplePaths = ['/proxies', '/profiles', '/simple', '/connections', '/bypass']
+
+  useEffect(() => {
+    setShowAdvanced(false)
+  }, [simpleMode])
+
+  useEffect(() => {
+    // A tour can visit advanced pages without changing the user's simple navigation.
+    if (document.body.classList.contains('driver-active')) return
+    if (
+      simpleMode &&
+      navigationGroups.some((group) => group.items.some((item) => item.path === pathname)) &&
+      !['/proxies', '/profiles', '/simple', '/connections', '/bypass'].includes(pathname)
+    )
+      setShowAdvanced(true)
+  }, [pathname, simpleMode])
 
   useLayoutEffect(() => {
     markInitialContentPartReady('sider')
@@ -349,9 +384,7 @@ export default function DexSidebar({
         <span className="dex-brand-symbol">
           <MihomoIcon size={25} />
         </span>
-        <span className="dex-brand-word">
-          D.E.X <small>STUDIO</small>
-        </span>
+        <span className="dex-brand-word">{PRODUCT_NAME}</span>
         <button
           className="dex-collapse app-nodrag"
           type="button"
@@ -459,7 +492,11 @@ export default function DexSidebar({
         }}
       >
         {navigationGroups.map((group) => {
-          const items = group.items.filter(matches)
+          const items = group.items.filter(
+            (item) =>
+              matches(item) &&
+              (!simpleMode || showAdvanced || search || simplePaths.includes(item.path))
+          )
           if (!items.length) return null
           const expanded = collapsed || Boolean(search) || openGroups[group.id]
           return (
@@ -487,6 +524,25 @@ export default function DexSidebar({
             </section>
           )
         })}
+        {simpleMode && !search && (
+          <button
+            type="button"
+            className="dex-nav-heading mt-3"
+            aria-expanded={showAdvanced}
+            title={text('展开或收起高级功能', 'Toggle advanced features')}
+            onClick={() => setShowAdvanced((value) => !value)}
+          >
+            <span>
+              {collapsed
+                ? '···'
+                : text(
+                    showAdvanced ? '收起更多功能' : '更多功能',
+                    showAdvanced ? 'Fewer features' : 'More features'
+                  )}
+            </span>
+            {!collapsed && <LuChevronDown data-expanded={showAdvanced} aria-hidden="true" />}
+          </button>
+        )}
         {search && utilityItems.filter(matches).length > 0 && (
           <section className="dex-nav-group">
             <div className="dex-search-section-label">{text('应用', 'Application')}</div>

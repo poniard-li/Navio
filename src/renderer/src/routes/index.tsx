@@ -1,3 +1,4 @@
+import { lazy } from 'react'
 import { Navigate } from 'react-router-dom'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { getSiderCardRoute } from '@renderer/utils/sider'
@@ -25,6 +26,9 @@ import {
 
 export { useDeferredRoutePreload } from './route-pages'
 
+const Help = lazy(() => import('../pages/help'))
+const Bypass = lazy(() => import('../pages/bypass'))
+
 const HomeRedirect: React.FC = () => {
   const { appConfig } = useAppConfig()
 
@@ -46,6 +50,14 @@ const ProfilesRoute: React.FC = () => {
 }
 
 const routes = [
+  {
+    path: '/help',
+    element: <Help />
+  },
+  {
+    path: '/bypass',
+    element: <Bypass />
+  },
   {
     path: '/dex-themes',
     element: <DexThemes />

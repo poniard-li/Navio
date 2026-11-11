@@ -17,7 +17,7 @@ import {
 } from '../../shared/appConfig'
 
 export const defaultConfig: IAppConfig = {
-  modeSelected: true,
+  modeSelected: false,
   operationMode: 'standard',
   core: 'mihomo',
   enableSmartCore: false,

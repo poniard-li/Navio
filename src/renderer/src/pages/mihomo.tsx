@@ -25,15 +25,9 @@ import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { platform } from '@renderer/utils/init'
 import { FaNetworkWired } from 'react-icons/fa'
-import {
-  IoMdCloudDownload,
-  IoMdInformationCircleOutline,
-  IoMdRefresh,
-  IoMdShuffle,
-  IoMdEye,
-  IoMdEyeOff
-} from 'react-icons/io'
+import { IoMdCloudDownload, IoMdRefresh, IoMdShuffle, IoMdEye, IoMdEyeOff } from 'react-icons/io'
 import PubSub from 'pubsub-js'
+import { FeatureIntro, HelpTip } from '@renderer/components/dex/feature-help'
 import {
   mihomoUpgrade,
   mihomoHotReloadConfig,
@@ -355,6 +349,7 @@ const Mihomo: React.FC = () => {
     <>
       {lanOpen && <InterfaceModal onClose={() => setLanOpen(false)} />}
       <BasePage title={t('mihomo.title')}>
+        <FeatureIntro topic="core" />
         {/* Smart 内核设置 */}
         <SettingCard>
           <div
@@ -364,7 +359,15 @@ const Mihomo: React.FC = () => {
                 : 'border-gray-300 bg-gray-50/30 dark:border-gray-600 dark:bg-gray-800/20'
             }`}
           >
-            <SettingItem title={t('mihomo.enableSmartCore')} divider>
+            <SettingItem
+              title={
+                <>
+                  {t('mihomo.enableSmartCore')}
+                  <HelpTip topic="smart" />
+                </>
+              }
+              divider
+            >
               <Switch
                 size="sm"
                 isSelected={enableSmartCore}
@@ -386,13 +389,10 @@ const Mihomo: React.FC = () => {
                 title={
                   <div className="flex items-center gap-2">
                     <span>{t('mihomo.enableSmartOverride')}</span>
-                    <Tooltip
-                      content={t('mihomo.smartOverrideTooltip')}
-                      placement="top"
-                      className="max-w-xs"
-                    >
-                      <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
-                    </Tooltip>
+                    <HelpTip
+                      title="Smart 分组覆写"
+                      content="将适合的订阅策略组转换为 Smart 自动选路分组，使现有订阅也能使用 Smart。它会改变分组的选路行为；若希望完全使用订阅原来的策略，可以关闭。"
+                    />
                   </div>
                 }
                 divider={core === 'mihomo-smart'}
@@ -413,6 +413,7 @@ const Mihomo: React.FC = () => {
               title={
                 <div className="flex items-center gap-2">
                   <span>{t('mihomo.coreVersion')}</span>
+                  <HelpTip topic="core" />
                   {core === 'mihomo-specific' && specificVersion && (
                     <Chip size="sm" variant="flat" color="primary">
                       {specificVersion}
@@ -498,13 +499,10 @@ const Mihomo: React.FC = () => {
                   title={
                     <div className="flex items-center gap-2">
                       <span>{t('mihomo.smartCoreUseLightGBM')}</span>
-                      <Tooltip
-                        content={t('mihomo.smartCoreUseLightGBMTooltip')}
-                        placement="top"
-                        className="max-w-xs"
-                      >
-                        <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
-                      </Tooltip>
+                      <HelpTip
+                        title="LightGBM 评分模型"
+                        content="让 Smart 使用机器学习模型辅助评价节点表现。不是聊天模型，也不能保证比默认算法更快；需要可用模型文件，下载时会联系所设置的模型来源。"
+                      />
                     </div>
                   }
                   divider
@@ -524,13 +522,10 @@ const Mihomo: React.FC = () => {
                   title={
                     <div className="flex items-center gap-2">
                       <span>{t('mihomo.smartCoreCollectData')}</span>
-                      <Tooltip
-                        content={t('mihomo.smartCoreCollectDataTooltip')}
-                        placement="top"
-                        className="max-w-xs"
-                      >
-                        <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
-                      </Tooltip>
+                      <HelpTip
+                        title="本地训练数据收集"
+                        content="为训练或分析模型在本机保存连接表现数据，可能包含访问域名、目标地址和节点信息。这不是普通选路的必需步骤，默认关闭；导出或分享前请检查内容。"
+                      />
                     </div>
                   }
                   divider
@@ -550,13 +545,10 @@ const Mihomo: React.FC = () => {
                   title={
                     <div className="flex items-center gap-2">
                       <span>{t('mihomo.smartCollectorSize')}</span>
-                      <Tooltip
-                        content={t('mihomo.smartCollectorSizeTooltip')}
-                        placement="top"
-                        className="max-w-xs"
-                      >
-                        <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
-                      </Tooltip>
+                      <HelpTip
+                        title="训练数据大小"
+                        content="控制本地收集文件的大小设置，单位为 MB。调大可能保留更多连接统计并占用更多磁盘；它不会提高代理带宽。"
+                      />
                     </div>
                   }
                   divider
@@ -589,13 +581,10 @@ const Mihomo: React.FC = () => {
                   title={
                     <div className="flex items-center gap-2">
                       <span>{t('mihomo.smartLgbmAutoUpdate')}</span>
-                      <Tooltip
-                        content={t('mihomo.smartLgbmAutoUpdateTooltip')}
-                        placement="top"
-                        className="max-w-xs"
-                      >
-                        <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
-                      </Tooltip>
+                      <HelpTip
+                        title="模型自动更新"
+                        content="按设定间隔从模型 URL 下载更新。下载会访问第三方地址，对方可看到请求出口 IP；仅使用可信来源，无需更新时可以关闭。"
+                      />
                     </div>
                   }
                   divider
@@ -630,13 +619,10 @@ const Mihomo: React.FC = () => {
                   title={
                     <div className="flex items-center gap-2">
                       <span>{t('mihomo.smartLgbmUrl')}</span>
-                      <Tooltip
-                        content={t('mihomo.smartLgbmUrlTooltip')}
-                        placement="top"
-                        className="max-w-xs"
-                      >
-                        <IoMdInformationCircleOutline className="text-gray-400 hover:text-gray-600 dark:text-gray-500 dark:hover:text-gray-300 cursor-help" />
-                      </Tooltip>
+                      <HelpTip
+                        title="模型下载地址"
+                        content="LightGBM 模型文件的来源，不是代理订阅地址。修改来源会改变模型下载目标，请使用可信维护者发布的文件。"
+                      />
                     </div>
                   }
                 >
@@ -1523,7 +1509,17 @@ const Mihomo: React.FC = () => {
               <SelectItem key="debug">{t('mihomo.debug')}</SelectItem>
             </Select>
           </SettingItem>
-          <SettingItem title={t('mihomo.findProcess')}>
+          <SettingItem
+            title={
+              <>
+                {t('mihomo.findProcess')}
+                <HelpTip
+                  title="进程识别"
+                  content="将连接关联到本机应用，以便显示进程名并匹配按应用分流的规则。关闭后，按进程设置的直连例外可能无法匹配；识别也会受到权限和应用连接方式影响。"
+                />
+              </>
+            }
+          >
             <Select
               classNames={{ trigger: 'data-[hover=true]:bg-default-200' }}
               className="w-25"

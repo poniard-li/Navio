@@ -91,6 +91,10 @@ export async function inheritStandardGeneralSettings(): Promise<void> {
   } catch {
     // The standard runtime may not have been generated yet; controlled values are sufficient.
   }
+  // The runtime can be rule mode for global direct exceptions; inherit the user's intent.
+  if (controlledConfig.mode) standardConfig.mode = controlledConfig.mode
+  if (controlledConfig['find-process-mode'])
+    standardConfig['find-process-mode'] = controlledConfig['find-process-mode']
   await simpleWriteQueue.run(async () => {
     const state = await getSimpleState()
     const firstUse = state.revision === 0

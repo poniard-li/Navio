@@ -1,5 +1,5 @@
 appId: studio.dex.desktop
-productName: D.E.X STUDIO
+productName: Navio
 directories:
   buildResources: build
 files:
@@ -21,16 +21,16 @@ extraResources:
   - from: './extra/'
     to: ''
 protocols:
-  name: 'D.E.X STUDIO URI Scheme'
+  name: 'Navio URI Scheme'
   schemes:
     - 'dexstudio'
 win:
   target:
     - nsis
     - 7z
-  artifactName: DEX-STUDIO-Windows-${version}-${arch}-portable.${ext}
+  artifactName: Navio-Windows-${version}-${arch}-portable.${ext}
 nsis:
-  artifactName: DEX-STUDIO-Windows-${version}-${arch}-setup.${ext}
+  artifactName: Navio-Windows-${version}-${arch}-setup.${ext}
   uninstallDisplayName: ${productName}
   allowToChangeInstallationDirectory: true
   oneClick: false

@@ -10,6 +10,7 @@ import {
   setGlobalMaxLogFileSizeMB
 } from '../utils/logFile'
 import { setAppLogDisabled } from '../utils/logger'
+import { normalizeBypass } from '../../shared/dex-bypass'
 
 let appConfig: IAppConfig // config.yaml
 const appConfigWriteQueue = new WriteQueue()
@@ -76,6 +77,8 @@ async function writeAppConfig(
     if (replaceNameserverPolicy) {
       nextConfig.nameserverPolicy = patch.nameserverPolicy ?? {}
     }
+    if (Object.prototype.hasOwnProperty.call(patch, 'dexBypass'))
+      nextConfig.dexBypass = normalizeBypass(patch.dexBypass)
     nextConfig.maxLogFileSize = normalizeMaxLogFileSizeMB(nextConfig.maxLogFileSize)
     try {
       await atomicWriteFile(appConfigPath(), stringify(nextConfig))

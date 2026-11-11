@@ -354,7 +354,7 @@ const GeneralConfig: React.FC = () => {
             }}
           />
         </SettingItem>
-        <SettingItem title="D.E.X 客户端更新" divider>
+        <SettingItem title="客户端更新" divider>
           <span className="text-xs text-default-500">
             预览版使用发布包升级；内核更新在内核设置中管理
           </span>

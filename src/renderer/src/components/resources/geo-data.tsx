@@ -7,6 +7,7 @@ import { mihomoUpgradeGeo } from '@renderer/utils/ipc'
 import { useState } from 'react'
 import { IoMdRefresh } from 'react-icons/io'
 import { useTranslation } from 'react-i18next'
+import { HelpTip } from '@renderer/components/dex/feature-help'
 
 const GeoData: React.FC = () => {
   const { t } = useTranslation()
@@ -30,7 +31,18 @@ const GeoData: React.FC = () => {
 
   return (
     <SettingCard>
-      <SettingItem title={t('resources.geoData.geoip')} divider>
+      <SettingItem
+        title={
+          <>
+            {t('resources.geoData.geoip')}
+            <HelpTip
+              title="GeoIP 规则数据库"
+              content="把 IP 地址归入国家、地区或服务分类，供分流规则使用。它是下载到本机的规则资料，不是读取你的 GPS 定位；分类可能不准确。"
+            />
+          </>
+        }
+        divider
+      >
         <div className="flex w-[70%]">
           {geoipInput !== geoxUrl.geoip && (
             <Button
@@ -47,7 +59,18 @@ const GeoData: React.FC = () => {
           <Input size="sm" value={geoipInput} onValueChange={setGeoIpInput} />
         </div>
       </SettingItem>
-      <SettingItem title={t('resources.geoData.geosite')} divider>
+      <SettingItem
+        title={
+          <>
+            {t('resources.geoData.geosite')}
+            <HelpTip
+              title="GeoSite 域名数据库"
+              content="把网站域名整理成可供规则引用的分类，例如某个服务的一组域名。更新来源会影响规则覆盖范围；它本身不会创建代理节点。"
+            />
+          </>
+        }
+        divider
+      >
         <div className="flex w-[70%]">
           {geositeInput !== geoxUrl.geosite && (
             <Button
@@ -64,7 +87,18 @@ const GeoData: React.FC = () => {
           <Input size="sm" value={geositeInput} onValueChange={setGeositeInput} />
         </div>
       </SettingItem>
-      <SettingItem title={t('resources.geoData.mmdb')} divider>
+      <SettingItem
+        title={
+          <>
+            {t('resources.geoData.mmdb')}
+            <HelpTip
+              title="MMDB 数据库"
+              content="另一种 IP 归属数据库格式，供内核查询网络分类。通常只在所选配置或规则需要时使用，保持默认来源即可。"
+            />
+          </>
+        }
+        divider
+      >
         <div className="flex w-[70%]">
           {mmdbInput !== geoxUrl.mmdb && (
             <Button

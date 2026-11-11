@@ -15,6 +15,7 @@ import React, { useEffect, useState } from 'react'
 import { HiExternalLink } from 'react-icons/hi'
 import { useTranslation } from 'react-i18next'
 import { IoMdCloudDownload } from 'react-icons/io'
+import { FeatureIntro } from '@renderer/components/dex/feature-help'
 
 const SubStore: React.FC = () => {
   const { t } = useTranslation()
@@ -39,8 +40,17 @@ const SubStore: React.FC = () => {
     })
   }, [t, useCustomSubStore])
 
-  if (!useCustomSubStore && !backendPort) return null
-  if (!frontendPort) return null
+  if ((!useCustomSubStore && !backendPort) || !frontendPort) {
+    return (
+      <BasePage title={t('substore.title')}>
+        <FeatureIntro topic="substore" />
+        <p className="m-4 text-sm text-foreground/60">
+          服务尚未就绪。可在「设置 → 数据 →
+          Sub-Store」中检查是否启用；普通订阅可以直接在「订阅」页导入。
+        </p>
+      </BasePage>
+    )
+  }
   return (
     <>
       <BasePage
@@ -94,8 +104,10 @@ const SubStore: React.FC = () => {
           </div>
         }
       >
+        <FeatureIntro topic="substore" />
         <iframe
-          className="w-full h-full"
+          title="Sub-Store 订阅管理"
+          className="w-full h-[calc(100%-100px)] min-h-72"
           allow="clipboard-write; clipboard-read"
           src={`http://127.0.0.1:${frontendPort}?api=${useCustomSubStore ? customSubStoreUrl : `http://127.0.0.1:${backendPort}`}`}
         />

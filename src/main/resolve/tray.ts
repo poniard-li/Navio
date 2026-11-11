@@ -4,6 +4,7 @@ import { tmpdir } from 'os'
 import { extname, join } from 'path'
 import { app, ipcMain, Menu, nativeImage, shell, systemPreferences, Tray } from 'electron'
 import { t } from 'i18next'
+import { PRODUCT_NAME } from '../../shared/product'
 import {
   changeCurrentProfile,
   getAppConfig,
@@ -13,6 +14,7 @@ import {
   patchControledMihomoConfig
 } from '../config'
 import { DEFAULT_MIHOMO_PORTS } from '../../shared/appConfig'
+import { usesGlobalBypass } from '../../shared/dex-bypass'
 import icoIcon from '../../../resources/icon.ico?asset'
 import icoIconBlue from '../../../resources/icon_blue.ico?asset'
 import icoIconRed from '../../../resources/icon_red.ico?asset'
@@ -83,7 +85,8 @@ export const buildContextMenu = async (): Promise<Menu> => {
     globalModeShortcut = '',
     directModeShortcut = '',
     quitWithoutCoreShortcut = '',
-    restartAppShortcut = ''
+    restartAppShortcut = '',
+    dexBypass
   } = await getAppConfig()
   let groupsMenu: Electron.MenuItemConstructorOptions[] = []
   if (proxyInTray && process.platform !== 'linux') {
@@ -200,7 +203,9 @@ export const buildContextMenu = async (): Promise<Menu> => {
     },
     {
       id: 'global',
-      label: t('tray.globalMode'),
+      label: usesGlobalBypass('global', dexBypass)
+        ? `${t('tray.globalMode')} · 含直连例外`
+        : t('tray.globalMode'),
       accelerator: globalModeShortcut,
       type: 'radio',
       checked: mode === 'global',
@@ -795,7 +800,9 @@ async function updateTrayToolTip(
 
   const modeLabel =
     mode === 'global'
-      ? t('tray.globalMode')
+      ? usesGlobalBypass(mode, appConfig.dexBypass)
+        ? `${t('tray.globalMode')} · 含直连例外`
+        : t('tray.globalMode')
       : mode === 'direct'
         ? t('tray.directMode')
         : t('tray.ruleMode')
@@ -809,7 +816,7 @@ async function updateTrayToolTip(
     status.push(t('tray.tooltip.customIcon'))
   }
 
-  tray.setToolTip(['D.E.X STUDIO', ...status].join('\n'))
+  tray.setToolTip([PRODUCT_NAME, ...status].join('\n'))
 }
 
 function setTrayImage(iconPath: string): void {

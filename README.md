@@ -1,25 +1,25 @@
-# v0.3.0-beta.1 · Public Beta
+# v0.4.0-beta.1 · Public Beta
 
 Built by D.E.X Studio
 
-这是历史构建的归档说明，不代表该版本此前已经公开上线。原内部版本为 `0.3.0-preview.1`，旧产品名和构建元数据按原样保留；`v0.3.0-beta.1` 是本次归档标签。下列测试数字来自随原构建保存的验证记录，不是本次重新运行的结果。
+这是历史构建的归档说明，不代表该版本此前已经公开上线。原内部版本为 `0.4.0-preview.1`，旧产品名和构建元数据按原样保留；`v0.4.0-beta.1` 是本次归档标签。下列测试数字来自随原构建保存的验证记录，不是本次重新运行的结果。
 
 本次提供独立分发副本：移除六个历史地理/域名数据文件并补充许可证及对应源码说明。原 app.asar、三套内核及其余原文件逐项验证字节一致，原始归档未变。首次使用 Geo 规则需要联网；源码确认初始化跳过缺失数据，真实 stable 内核已经通过无数据的基本配置和本机服务按需下载 GEOSITE/GEOIP/IP-ASN 的验证。外网可达性、所有订阅和可选内核并未据此宣称全部通过。
 
-- 基于 Clash Party 2.0.4 与 Mihomo 重建完整客户端，恢复订阅、策略组、规则、外部资源、DNS、嗅探、TUN、系统代理/PAC、连接与日志等主要能力。
-- 保留覆写、YAML/JavaScript 编辑、Sub-Store、备份、托盘、快捷键等高级入口；新增六套主题、主题编辑与导出、Ctrl+K 功能查找。
-- 使用独立数据目录及端口；首次默认关闭系统代理、TUN、局域网访问和更新检查。恢复代理设置时检查归属，减少对其他实例的影响。
-- 历史 Windows 验证为 575 项通过、1 项跳过（44 个文件），另排除不适用于该环境的 Linux symlink 文件。打包程序、13 个页面和本地 HTTP 转发有真实检查记录。
+- 更名 Navio，增加首次使用引导、简易/标准模式，以及高级功能和 ISP/ASN 等术语说明。
+- 增加仅对全局意图生效的直连例外：匹配项 DIRECT，其余交给 GLOBAL；切回规则模式保留订阅规则。内置应用预设默认关闭。
+- 本版网络信息调整同时收起坐标、城市和时区；这是历史行为，后续 v0.5 才恢复除坐标外的原有信息。
+- 历史自动测试为 610 项通过、1 项跳过（48 个文件）；真实内核的本地域名/进程规则转发有验证记录。
 
-边界：未真实切换宿主系统代理/TUN/路由/DNS，未验证真实外部节点、Alpha/Smart 内核、macOS/Linux 或云端部署。CFW Parsers/Mixin 当时仍需人工迁移。
+边界：本版简易/标准切换仍涉及重新加载配置；共用同一订阅的完善实现见 v0.5。本版打包 UI 验证因环境 ACL 受阻，不能称为已完成实机视觉验收。没有统一账号或独立 TUN 后台服务。
 
-English: Rebuilt on Clash Party and Mihomo, this version restored the broader configuration and advanced-tool surface. Historical checks cover Windows and local proxy forwarding, not external providers or privileged TUN behavior.
+English: Navio branding, onboarding and global-mode direct exceptions were introduced. The packaged UI was not fully validated because of an environment permission failure; later versions resolve additional usability issues.
 
-原始源码 SHA256：`6abcd2c3411151c752bf67dfcd59d7a0861c611927e6f928984874d1feed656b`  
-原始便携包 SHA256：`ea6da17f04749aa6a1e10c48f09b1460ed1ec040fb2b1cfb76fbe0492ce49e66`
+原始源码 SHA256：`3d833ddb6ee6df9cb4f291a4f65f07b90d812ad5788f5592f4c9e28f725223b8`  
+原始便携包 SHA256：`9b86689a24d2fa18addf4f6390d901cd4d5a5034ecf59ca091570b0d0a85df7f`
 
-本次分发源码 SHA256：`36f9f2cd7f0c3e0d7cc81dc080c6f5a9d2e4a7e031ea04c29a09bcc3fe4e58d3`  
-本次分发便携包 SHA256：`0d390230a7bd66f3ecd8c93cc0b3fb51d3232b2775355557496d0872468f8196`
+本次分发源码 SHA256：`26025ab02b6ffcdd2c79fa48cef6660eba476c5bad29f96818d6a6705156f1d9`  
+本次分发便携包 SHA256：`106eb2b41da8f3516b2098b847ad160960cfc70d502a391f08d6c11d7dbaf995`
 
 对应源码附件：`Navio-v0.3-v0.6-third-party-sources.zip`，SHA256：`258d61f71628710740aa9a805edc06079e96fd20d40a348d872153551f7a7952`。
 

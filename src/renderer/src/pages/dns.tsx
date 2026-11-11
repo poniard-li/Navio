@@ -9,6 +9,7 @@ import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { mihomoHotReloadConfig } from '@renderer/utils/ipc'
 import React, { Key, ReactNode, useState } from 'react'
 import { useTranslation } from 'react-i18next'
+import { FeatureIntro, HelpTip } from '@renderer/components/dex/feature-help'
 import {
   DEFAULT_CONTROL_DNS,
   DEFAULT_MIHOMO_DNS_CONFIG,
@@ -237,6 +238,7 @@ const DNS: React.FC = () => {
         )
       }
     >
+      <FeatureIntro topic="dns" />
       <SettingCard>
         {operationMode !== 'simple' && (
           <SettingItem title={t('dns.enable')} divider>
@@ -260,7 +262,18 @@ const DNS: React.FC = () => {
             />
           </SettingItem>
         )}
-        <SettingItem title={t('dns.enhancedMode.title')} divider>
+        <SettingItem
+          title={
+            <>
+              {t('dns.enhancedMode.title')}
+              <HelpTip
+                title="Fake-IP 与 Redir-Host"
+                content="Fake-IP 为域名分配本地虚拟地址，帮助内核准确分流；Redir-Host 返回实际解析地址。Fake-IP 不会改变公网出口身份，少数不兼容应用可通过过滤列表改用真实地址。"
+              />
+            </>
+          }
+          divider
+        >
           <Tabs
             size="sm"
             color="primary"
@@ -322,7 +335,18 @@ const DNS: React.FC = () => {
             }}
           />
         </SettingItem>
-        <SettingItem title={t('dns.respectRules')} divider>
+        <SettingItem
+          title={
+            <>
+              {t('dns.respectRules')}
+              <HelpTip
+                title="DNS 遵循分流规则"
+                content="让 DNS 连接按规则选择出口。需要同时配置代理节点域名的解析服务器，避免先连接代理才能解析代理地址的循环依赖。不了解时请保留默认。"
+              />
+            </>
+          }
+          divider
+        >
           <Switch
             size="sm"
             isSelected={values.respectRules}

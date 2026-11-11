@@ -71,6 +71,7 @@ import GroupEditorModal from '@renderer/components/proxies/group-editor-modal'
 import DeleteResourceButton from '@renderer/components/simple/delete-resource-button'
 import SortableGroup from '@renderer/components/proxies/sortable-group'
 import { toast } from '@renderer/components/base/toast'
+import { usesGlobalBypass } from '../../../shared/dex-bypass'
 import type { SimpleObject } from '../../../shared/simple-config'
 
 const GROUP_EXPAND_STATE_KEY = 'proxy_group_expand_state'
@@ -860,7 +861,21 @@ const Proxies: React.FC = () => {
 
   return (
     <BasePage
-      title={t('proxies.title')}
+      title={
+        <span className="flex items-center gap-3">
+          {t('proxies.title')}
+          {usesGlobalBypass(mode, appConfig?.dexBypass) && (
+            <button
+              className="app-nodrag rounded-md bg-primary/10 px-2 py-1 text-xs text-primary"
+              onClick={() => {
+                window.location.hash = '/bypass'
+              }}
+            >
+              全局 · 含直连例外
+            </button>
+          )}
+        </span>
+      }
       header={
         <>
           <Dropdown placement="bottom-end" closeOnSelect={false}>

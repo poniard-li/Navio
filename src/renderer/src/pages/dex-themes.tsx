@@ -14,6 +14,7 @@ import {
 import { useNavigate } from 'react-router-dom'
 import BasePage from '@renderer/components/base/base-page'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { PRODUCT_NAME } from '../../../shared/product'
 import {
   DEX_COLOR_KEYS,
   type DexColorKey,
@@ -77,9 +78,7 @@ function Preview({
         className="flex w-[25%] min-w-16 max-w-24 flex-col gap-1 border-r p-2"
         style={{ background: c.surface, color: c.text, borderColor: c.border }}
       >
-        <div className="mb-1 text-[9px] font-bold tracking-wider">
-          D.E.X <span className="text-[5px] font-normal opacity-60">STUDIO</span>
-        </div>
+        <div className="mb-1 text-[9px] font-bold tracking-wider">{PRODUCT_NAME}</div>
         {['代理节点', '订阅管理', '分流规则'].map((label, index) => (
           <div
             key={label}
@@ -189,7 +188,7 @@ const DexThemes: React.FC = () => {
         theme: {
           ...draft,
           name: draft.name.trim() || '主题预览',
-          author: draft.author.trim() || 'D.E.X STUDIO'
+          author: draft.author.trim() || 'D.E.X Studio'
         }
       }).catch(() => {})
     }, 120)
@@ -220,7 +219,7 @@ const DexThemes: React.FC = () => {
       ...structuredClone(base),
       id: edit ? base.id : `custom-${crypto.randomUUID().slice(0, 12)}`,
       name: edit ? base.name : `${base.name} · 我的设计`.slice(0, 48),
-      author: edit ? base.author : 'D.E.X STUDIO'
+      author: edit ? base.author : 'D.E.X Studio'
     })
   }
   const changeDraft = (patch: Partial<DexTheme>): void =>
@@ -251,7 +250,7 @@ const DexThemes: React.FC = () => {
   }
   return (
     <BasePage
-      title="D.E.X 主题工坊"
+      title="主题工坊"
       header={
         <Button
           className="app-nodrag"
@@ -380,7 +379,7 @@ const DexThemes: React.FC = () => {
             </h2>
             <p className="mt-2 text-sm text-default-500">
               {tab === 'local'
-                ? '从任意精选主题创建副本，或者导入 D.E.X 主题 JSON 文件。'
+                ? '从任意精选主题创建副本，或者导入主题 JSON 文件。'
                 : tab === 'remote'
                   ? '填写部署好的服务地址，再刷新浏览远程设计。'
                   : '请稍候。'}
@@ -650,7 +649,7 @@ const DexThemes: React.FC = () => {
           <ModalHeader>连接你的主题服务器</ModalHeader>
           <ModalBody>
             <p className="text-sm text-default-500">
-              填写已经部署的 D.E.X JSON API 地址。主题服务独立于代理订阅，不会接收你的节点配置。
+              填写已经部署的主题服务地址。主题服务独立于代理订阅，不会接收你的节点配置。
             </p>
             <label>
               <span className={fieldLabel}>服务地址</span>

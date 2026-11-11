@@ -6,6 +6,7 @@ import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useTranslation } from 'react-i18next'
 import { useEffect, useState } from 'react'
 import EditModeMenu from '@renderer/components/simple/edit-mode-menu'
+import { FeatureIntro } from '@renderer/components/dex/feature-help'
 
 const Resources: React.FC = () => {
   const { t } = useTranslation()
@@ -22,6 +23,7 @@ const Resources: React.FC = () => {
       title={t('sider.cards.resources')}
       header={simple ? <EditModeMenu enabled={editing} onChange={setEditing} /> : undefined}
     >
+      <FeatureIntro topic="resources" />
       {core === 'mihomo-smart' && <SmartModel />}
       <GeoData />
       <RuleProvider editing={simple && editing} />

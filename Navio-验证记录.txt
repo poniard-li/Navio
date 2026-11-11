@@ -1,0 +1,36 @@
+Navio 0.4.0-preview.1 — 验证记录
+
+构建与标识
+Node/Web TypeScript 类型检查通过。
+使用 Node.js 24 的原生配置构建入口成功生成 main、preload、renderer；原有 React、Tailwind、Monaco 与 Electron Vite 插件均保留。
+Windows 运行时与内核沿用用户提供的固定资源。程序 ProductName / FileDescription / OriginalFilename 为 Navio / Navio / Navio.exe，CompanyName 为 D.E.X Studio。
+未修改其他代理客户端，未部署云服务器，未修改 Windows 系统代理或开启 TUN。
+
+单元测试
+最终测试：48 个测试文件通过，610 项通过、1 项跳过。
+命令：node node_modules/vitest/vitest.mjs run --configLoader native --exclude src/main/utils/app-info/linux.test.ts
+Linux 专用符号链接测试文件在 Windows 环境中排除，不计为通过。
+新增覆盖：直连规则优先级、配置校验、模式切换与失败回滚、原用户模式/进程识别设置保留、DNS 暂停状态回滚、网络信息敏感字段过滤。
+相关改动文件 ESLint 无错误。
+
+真实内核验证
+固定 Mihomo v1.19.32 已实际运行，使用本机回环服务和独立配置完成：
+1. 用户 global 意图转换后的 rule 配置能被内核接受。
+2. GLOBAL 选 REJECT 时，白名单域名仍通过 DIRECT 到达回环目标。
+3. 非白名单域名使用 GLOBAL REJECT，未误用订阅兜底规则。
+4. 禁用例外恢复原生 global 模式。
+5. 切回 rule 恢复订阅原规则。
+6. 再进入全局例外后，直连恢复。
+7. 精确 PROCESS-NAME 识别本机测试 Node 进程并直连。
+8. direct 模式保持原生全部直连。
+上述测试不等于已验证微信、抖音所有版本和所有关联服务；内建清单仍需真实使用中持续维护。
+
+界面与整包验收限制
+本次尝试启动打包后的 Electron 程序时，当前执行环境的 Windows 应用容器 ACL 使安装目录无法被沙箱子进程读取，程序在窗口出现前被阻止。
+未修改文件权限、未关闭 Electron 沙箱。随后尝试浏览器本地界面预览，浏览器权限检查返回访问未获授权，已停止该尝试。
+因此，本版的首次引导、帮助提示、窗口尺寸、完整桌面交互和整包启动尚未完成实际界面验收。没有将旧版截图作为本版截图，也没有将模拟界面作为真实桌面运行记录。
+构建成功、类型检查与内核路由测试不能替代最终界面验收。
+
+需要继续实机验收的项目
+全新解压后的首次模式选择；引导前后步、关闭确认、稍后学习与重启状态；标准/简易模式切换；800×600 及高 DPI 排版；真实订阅；微信/抖音进程和域名命中；TUN/管理员权限；系统代理恢复；自启动；主题远程发布。
+现有主题和专业功能代码均保留。本次未对阿里云、真实机场订阅或用户现有代理设置进行在线修改。

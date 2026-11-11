@@ -3,7 +3,8 @@ import { existsSync } from 'fs'
 import { controledMihomoConfigPath } from '../utils/dirs'
 import { parse, stringify } from '../utils/yaml'
 import { generateProfile } from '../core/factory'
-import { patchMihomoConfig, startMihomoLogs } from '../core/mihomoApi'
+import { mihomoHotReloadConfig, patchMihomoConfig, startMihomoLogs } from '../core/mihomoApi'
+import { usesGlobalBypass } from '../../shared/dex-bypass'
 import { defaultControledMihomoConfig } from '../utils/template'
 import { deepMerge } from '../utils/merge'
 import { createLogger } from '../utils/logger'
@@ -157,6 +158,9 @@ export async function patchControledMihomoConfig(patch: Partial<IMihomoConfig>):
       nextConfig.sniffer = cloneDefaultControledMihomoConfig().sniffer
     }
 
+    const previousConfig = structuredClone(
+      controledMihomoConfig || cloneDefaultControledMihomoConfig()
+    )
     await generateProfile(nextConfig)
     await atomicWriteFile(controledMihomoConfigPath(), stringify(nextConfig), { encoding: 'utf8' })
     controledMihomoConfig = nextConfig
@@ -164,14 +168,46 @@ export async function patchControledMihomoConfig(patch: Partial<IMihomoConfig>):
       await patchAppConfig({ controlDns: controlDnsBeforePause, controlDnsBeforePause: undefined })
     }
 
-    // 优先对运行中内核进行热更新，避免无意义重启
-    try {
-      await patchMihomoConfig(nextPatch)
-    } catch (error) {
-      controledMihomoLogger.warn(
-        'Hot patch /configs failed, changes will apply on next restart',
-        error
-      )
+    // Entering/leaving global exceptions replaces the rule table, so /configs PATCH is insufficient.
+    if (
+      nextPatch.mode &&
+      (usesGlobalBypass(currentMode, appConfig.dexBypass) ||
+        usesGlobalBypass(nextPatch.mode, appConfig.dexBypass))
+    ) {
+      try {
+        await mihomoHotReloadConfig()
+      } catch (error) {
+        await atomicWriteFile(controledMihomoConfigPath(), stringify(previousConfig), {
+          encoding: 'utf8'
+        })
+        controledMihomoConfig = previousConfig
+        try {
+          if (restoreDnsState) {
+            // The failed transition may have restored DNS after an SSID pause.
+            // Restore that application state before regenerating the old mode.
+            await patchAppConfig({
+              controlDns: appConfig.controlDns,
+              controlDnsBeforePause: appConfig.controlDnsBeforePause
+            })
+          }
+          await mihomoHotReloadConfig()
+        } catch (restoreError) {
+          throw new Error(
+            `模式切换失败，恢复内核也未成功，请重启内核：${String(error)}；${String(restoreError)}`
+          )
+        }
+        throw error
+      }
+    } else {
+      // 优先对运行中内核进行热更新，避免无意义重启
+      try {
+        await patchMihomoConfig(nextPatch)
+      } catch (error) {
+        controledMihomoLogger.warn(
+          'Hot patch /configs failed, changes will apply on next restart',
+          error
+        )
+      }
     }
 
     // log-level 改变时重连日志 WebSocket，使新等级立刻生效

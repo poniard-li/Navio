@@ -2,6 +2,7 @@ import { existsSync, mkdirSync } from 'fs'
 import path from 'path'
 import { is } from '@electron-toolkit/utils'
 import { app } from 'electron'
+import { PRODUCT_NAME } from '../../shared/product'
 
 export const homeDir = app.getPath('home')
 
@@ -16,7 +17,7 @@ function portableDataDir(): string {
 // Every build uses the DEX identity. Never inherit the reference client's data,
 // including a neighbouring portable `data` directory.
 export function configureAppPaths(): void {
-  app.setName('D.E.X STUDIO')
+  app.setName(PRODUCT_NAME)
   const override = process.env.DEX_USER_DATA?.trim()
   app.setPath(
     'userData',

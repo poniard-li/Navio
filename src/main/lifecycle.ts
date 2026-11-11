@@ -3,6 +3,7 @@ import { promisify } from 'util'
 import { stat } from 'fs/promises'
 import { existsSync } from 'fs'
 import { app, dialog, powerMonitor } from 'electron'
+import { PRODUCT_NAME } from '../shared/product'
 import { stopCoreForExit, cleanupCoreWatcher } from './core/manager'
 import { primeAdminPrivilegesCache } from './core/admin'
 import { restoreSysProxyForExit, disableSysProxySync } from './sys/sysproxy'
@@ -133,7 +134,7 @@ export function setupAppLifecycle(): void {
   const reportRestoreFailure = (error: unknown): void => {
     showMainWindow()
     dialog.showErrorBox(
-      'D.E.X STUDIO — 系统代理恢复失败',
+      `${PRODUCT_NAME} — 系统代理恢复失败`,
       `尚未退出：无法恢复启动代理前的系统设置。内核和窗口仍保留，请重试关闭系统代理或再次退出。\n\n${String(error)}`
     )
   }

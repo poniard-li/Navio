@@ -1,10 +1,10 @@
 {
-  "name": "dex-studio-next",
-  "version": "0.3.0-preview.1",
-  "description": "D.E.X STUDIO desktop client based on Clash Party and Mihomo",
+  "name": "navio-desktop",
+  "version": "0.4.0-preview.1",
+  "description": "Navio desktop client by D.E.X Studio, based on Clash Party and Mihomo",
   "type": "module",
   "main": "./out/main/index.js",
-  "author": "D.E.X STUDIO and Clash Party contributors",
+  "author": "D.E.X Studio and Clash Party contributors",
   "homepage": "https://mydex.top",
   "scripts": {
     "test": "vitest run",
@@ -37,7 +37,8 @@
     "build:linux": "electron-vite build && electron-builder --publish never --linux",
     "build:linux:dev": "pnpm run prepare:dev && electron-vite build && electron-builder --publish never --linux",
     "prepare:upstream": "node scripts/prepare.mjs",
-    "build": "electron-vite build"
+    "build": "electron-vite build",
+    "build:native": "node scripts/build-native.mjs"
   },
   "dependencies": {
     "@electron-toolkit/utils": "^4.0.0",
@@ -133,7 +134,7 @@
     "vitest": "4.1.10"
   },
   "packageManager": "pnpm@11.8.0",
-  "productName": "D.E.X STUDIO",
+  "productName": "Navio",
   "license": "GPL-3.0-only",
   "private": true
 }

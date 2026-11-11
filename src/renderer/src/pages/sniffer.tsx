@@ -9,6 +9,7 @@ import { mihomoHotReloadConfig } from '@renderer/utils/ipc'
 import React, { ReactNode, useState } from 'react'
 import { MdDeleteForever } from 'react-icons/md'
 import { useTranslation } from 'react-i18next'
+import { FeatureIntro, HelpTip } from '@renderer/components/dex/feature-help'
 import { DEFAULT_CONTROL_SNIFF, DEFAULT_MIHOMO_SNIFFER_CONFIG } from '../../../shared/appConfig'
 
 const Sniffer: React.FC = () => {
@@ -144,6 +145,7 @@ const Sniffer: React.FC = () => {
         )
       }
     >
+      <FeatureIntro topic="sniffer" />
       <SettingCard>
         {operationMode !== 'simple' && (
           <SettingItem title={t('sniffer.enable')} divider>
@@ -156,7 +158,18 @@ const Sniffer: React.FC = () => {
             />
           </SettingItem>
         )}
-        <SettingItem title={t('sniffer.overrideDestination')} divider>
+        <SettingItem
+          title={
+            <>
+              {t('sniffer.overrideDestination')}
+              <HelpTip
+                title="覆写目标地址"
+                content="使用嗅探识别的域名作为实际连接目标。仅需要域名规则匹配时未必需要开启；错误的域名识别可能使特定网站或应用连接失败。"
+              />
+            </>
+          }
+          divider
+        >
           <Switch
             size="sm"
             isSelected={values.overrideDestination}
@@ -176,7 +189,18 @@ const Sniffer: React.FC = () => {
             }}
           />
         </SettingItem>
-        <SettingItem title={t('sniffer.forceDNSMapping')} divider>
+        <SettingItem
+          title={
+            <>
+              {t('sniffer.forceDNSMapping')}
+              <HelpTip
+                title="强制 DNS 映射嗅探"
+                content="即使 DNS 映射已有域名，也尝试从连接信息中识别域名。用于修正域名与地址映射不一致的情况；可能增加处理开销，建议保持默认。"
+              />
+            </>
+          }
+          divider
+        >
           <Switch
             size="sm"
             isSelected={values.forceDNSMapping}
@@ -185,7 +209,18 @@ const Sniffer: React.FC = () => {
             }}
           />
         </SettingItem>
-        <SettingItem title={t('sniffer.parsePureIP')} divider>
+        <SettingItem
+          title={
+            <>
+              {t('sniffer.parsePureIP')}
+              <HelpTip
+                title="嗅探纯 IP 连接"
+                content="对没有域名信息、直接访问 IP 的连接也尝试识别域名。并非所有连接都能识别；需要应用在协议中提供可见的域名。"
+              />
+            </>
+          }
+          divider
+        >
           <Switch
             size="sm"
             isSelected={values.parsePureIP}

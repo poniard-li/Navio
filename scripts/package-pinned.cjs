@@ -59,7 +59,13 @@ const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).dige
   delete pkg.devDependencies
   delete pkg.scripts
   await fs.writeFile(path.join(appStage, 'package.json'), JSON.stringify(pkg, null, 2))
-  for (const file of ['LICENSE', 'DEX-THIRD-PARTY-NOTICES.txt', 'DEX-BUILD.txt', 'PINNED-RESOURCES.json']) {
+  for (const file of [
+    'LICENSE',
+    'DEX-THIRD-PARTY-NOTICES.txt',
+    'DEX-BUILD.txt',
+    'NATIVE-BUILD.txt',
+    'PINNED-RESOURCES.json'
+  ]) {
     if (fss.existsSync(path.join(root, file)))
       await fs.copyFile(path.join(root, file), path.join(appStage, file))
   }
@@ -97,22 +103,22 @@ const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).dige
       icon.icons.map((i) => i.data)
     )
   for (const vi of ResEdit.Resource.VersionInfo.fromEntries(resources.entries)) {
-    vi.setFileVersion(0, 3, 0, 1)
-    vi.setProductVersion(0, 3, 0, 1)
+    vi.setFileVersion(0, 4, 0, 1)
+    vi.setProductVersion(0, 4, 0, 1)
     for (const lang of vi.getAvailableLanguages())
       vi.setStringValues(lang, {
-        CompanyName: 'D.E.X STUDIO',
-        FileDescription: 'D.E.X STUDIO',
-        ProductName: 'D.E.X STUDIO',
-        InternalName: 'D.E.X STUDIO',
-        OriginalFilename: 'D.E.X STUDIO.exe',
+        CompanyName: 'D.E.X Studio',
+        FileDescription: pkg.productName,
+        ProductName: pkg.productName,
+        InternalName: pkg.productName,
+        OriginalFilename: `${pkg.productName}.exe`,
         LegalCopyright: 'D.E.X STUDIO; Clash Party and other open-source contributors',
         ProductVersion: pkg.version
       })
     vi.outputToResourceEntries(resources.entries)
   }
   resources.outputResource(exe)
-  await fs.writeFile(path.join(output, 'D.E.X STUDIO.exe'), Buffer.from(exe.generate()))
+  await fs.writeFile(path.join(output, `${pkg.productName}.exe`), Buffer.from(exe.generate()))
   const sidecars = []
   for (const file of await fs.readdir(path.join(output, 'resources/sidecar')))
     sidecars.push({ file, sha256: hash(path.join(output, 'resources/sidecar', file)) })
@@ -129,7 +135,13 @@ const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).dige
     path.join(output, 'DEX-BUILD-MANIFEST.json'),
     JSON.stringify(manifest, null, 2)
   )
-  for (const file of ['LICENSE', 'DEX-THIRD-PARTY-NOTICES.txt', 'DEX-BUILD.txt', 'PINNED-RESOURCES.json'])
+  for (const file of [
+    'LICENSE',
+    'DEX-THIRD-PARTY-NOTICES.txt',
+    'DEX-BUILD.txt',
+    'NATIVE-BUILD.txt',
+    'PINNED-RESOURCES.json'
+  ])
     if (fss.existsSync(path.join(root, file)))
       await fs.copyFile(path.join(root, file), path.join(output, file))
   console.log(JSON.stringify({ output, version: pkg.version, sidecars: sidecars.length }))

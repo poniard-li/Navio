@@ -67,7 +67,7 @@ describe('configureAppPaths', () => {
     const { configureAppPaths } = await import('./dirs')
     configureAppPaths()
 
-    expect(setName).toHaveBeenCalledWith('D.E.X STUDIO')
+    expect(setName).toHaveBeenCalledWith('Navio')
     expect(paths.userData).toBe(path.join(APP_DATA, 'DEX-STUDIO-NEXT'))
   })
 
@@ -76,7 +76,7 @@ describe('configureAppPaths', () => {
     const { configureAppPaths } = await import('./dirs')
     configureAppPaths()
 
-    expect(setName).toHaveBeenCalledWith('D.E.X STUDIO')
+    expect(setName).toHaveBeenCalledWith('Navio')
     expect(paths.userData).toBe(path.join(APP_DATA, 'DEX-STUDIO-NEXT'))
   })
 
@@ -85,7 +85,7 @@ describe('configureAppPaths', () => {
     const { configureAppPaths } = await import('./dirs')
     configureAppPaths()
 
-    expect(setName).toHaveBeenCalledWith('D.E.X STUDIO')
+    expect(setName).toHaveBeenCalledWith('Navio')
     expect(paths.userData).toBe(path.join(EXE_DIR, 'DEX-STUDIO-NEXT'))
     expect(setPath).toHaveBeenLastCalledWith('userData', path.join(EXE_DIR, 'DEX-STUDIO-NEXT'))
   })

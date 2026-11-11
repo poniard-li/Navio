@@ -25,31 +25,15 @@ import { IoMdGlobe, IoMdPulse } from 'react-icons/io'
 import { useTranslation } from 'react-i18next'
 import { fetchIPInfo, measureLatency } from '@renderer/utils/ipc'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { HelpTip } from '@renderer/components/dex/feature-help'
 import { DEFAULT_NETWORK_INFO_CARD_ORDER } from '../../../shared/appConfig'
+import {
+  IP_INFO_ENDPOINTS,
+  type IPInfoProvider,
+  type NetworkIPInfo
+} from '../../../shared/network-info'
 
-type IPProvider = 'ip.sb' | 'ipwho.is' | 'ipapi.is'
-
-interface IPInfo {
-  ip: string
-  country?: string
-  countryCode?: string
-  city?: string
-  region?: string
-  asn?: number
-  org?: string
-  isp?: string
-  isProxy?: boolean
-  isVPN?: boolean
-  timezone?: string
-  latitude?: number
-  longitude?: number
-}
-
-const IP_ENDPOINTS: Record<IPProvider, string> = {
-  'ip.sb': 'https://api.ip.sb/geoip',
-  'ipwho.is': 'https://ipwho.is/',
-  'ipapi.is': 'https://api.ipapi.is/'
-}
+type IPProvider = IPInfoProvider
 
 const CountryFlag: React.FC<{ code?: string; className?: string }> = ({ code, className }) => {
   if (!code || code.length !== 2) return null
@@ -59,54 +43,6 @@ const CountryFlag: React.FC<{ code?: string; className?: string }> = ({ code, cl
       style={{ fontSize: '1rem', lineHeight: 1 }}
     />
   )
-}
-
-function parseProvider(provider: IPProvider, data: Record<string, unknown>): IPInfo {
-  if (provider === 'ip.sb') {
-    return {
-      ip: data.ip as string,
-      country: data.country as string | undefined,
-      countryCode: data.country_code as string | undefined,
-      city: data.city as string | undefined,
-      asn: data.asn as number | undefined,
-      org: data.asn_organization as string | undefined,
-      latitude: data.latitude as number | undefined,
-      longitude: data.longitude as number | undefined
-    }
-  }
-  if (provider === 'ipwho.is') {
-    const conn = data.connection as Record<string, unknown> | undefined
-    const tz = data.timezone as Record<string, unknown> | undefined
-    return {
-      ip: data.ip as string,
-      country: data.country as string | undefined,
-      countryCode: data.country_code as string | undefined,
-      city: data.city as string | undefined,
-      region: data.region as string | undefined,
-      asn: conn?.asn as number | undefined,
-      org: conn?.org as string | undefined,
-      isp: conn?.isp as string | undefined,
-      timezone: tz?.id as string | undefined,
-      latitude: data.latitude as number | undefined,
-      longitude: data.longitude as number | undefined
-    }
-  }
-  const loc = data.location as Record<string, unknown> | undefined
-  const asn = data.asn as Record<string, unknown> | undefined
-  return {
-    ip: data.ip as string,
-    country: loc?.country as string | undefined,
-    countryCode: loc?.country_code as string | undefined,
-    city: loc?.city as string | undefined,
-    region: loc?.state as string | undefined,
-    asn: asn?.asn as number | undefined,
-    org: asn?.org as string | undefined,
-    isProxy: data.is_proxy as boolean | undefined,
-    isVPN: data.is_vpn as boolean | undefined,
-    timezone: loc?.timezone as string | undefined,
-    latitude: loc?.latitude as number | undefined,
-    longitude: loc?.longitude as number | undefined
-  }
 }
 
 // ─── Latency ───────────────────────────────────────────────────────────────
@@ -251,7 +187,7 @@ const providers: { value: IPProvider; label: string }[] = [
 ]
 
 interface InfoRowProps {
-  label: string
+  label: React.ReactNode
   value: React.ReactNode
   mono?: boolean
 }
@@ -274,11 +210,11 @@ const IPPage: React.FC = () => {
     (appConfig?.networkIPProvider as IPProvider) ?? 'ip.sb'
   )
   const fetchIdRef = useRef(0)
-  const [ipInfo, setIpInfo] = useState<IPInfo | null>(null)
+  const [ipInfo, setIpInfo] = useState<NetworkIPInfo | null>(null)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [copied, setCopied] = useState(false)
-  const [hidden, setHidden] = useState(false)
+  const [hidden, setHidden] = useState(true)
   const [isAddingLatencyTarget, setIsAddingLatencyTarget] = useState(false)
   const [customLatencyName, setCustomLatencyName] = useState('')
   const [customLatencyUrl, setCustomLatencyUrl] = useState('')
@@ -288,11 +224,14 @@ const IPPage: React.FC = () => {
   // latency state: map from url -> result
   const [latencyResults, setLatencyResults] = useState<Record<string, LatencyResult>>({})
   const [testingLatency, setTestingLatency] = useState(false)
-  const appConfigLoaded = appConfig !== undefined
   const [cardOrder, setCardOrder] = useState<NetworkInfoCardKey[]>(() =>
     mergeNetworkInfoCardOrder(appConfig?.networkInfoCardOrder)
   )
   const sensors = useSensors(useSensor(PointerSensor, { activationConstraint: { distance: 8 } }))
+
+  useEffect(() => {
+    if (appConfig?.networkIPProvider) setProvider(appConfig.networkIPProvider)
+  }, [appConfig?.networkIPProvider])
 
   useEffect(() => {
     setCardOrder(mergeNetworkInfoCardOrder(appConfig?.networkInfoCardOrder))
@@ -440,11 +379,6 @@ const IPPage: React.FC = () => {
     setTestingLatency(false)
   }, [latencyTargets])
 
-  useEffect(() => {
-    if (!appConfigLoaded) return
-    testAllLatencies()
-  }, [appConfigLoaded, testAllLatencies])
-
   const averageLatency = (() => {
     const successes = latencyTargets
       .map((t) => latencyResults[t.url])
@@ -463,9 +397,9 @@ const IPPage: React.FC = () => {
       setLoading(true)
       setError(null)
       try {
-        const data = await fetchIPInfo(IP_ENDPOINTS[target])
+        const data = await fetchIPInfo(IP_INFO_ENDPOINTS[target])
         if (currentFetchId !== fetchIdRef.current) return
-        setIpInfo(parseProvider(target, data as Record<string, unknown>))
+        setIpInfo(data)
       } catch (e) {
         if (currentFetchId !== fetchIdRef.current) return
         setError(e instanceof Error ? e.message : t('network.fetchFailed'))
@@ -479,11 +413,6 @@ const IPPage: React.FC = () => {
     [provider, t]
   )
 
-  useEffect(() => {
-    fetchIP()
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [])
-
   const handleCopy = useCallback(() => {
     if (!ipInfo?.ip) return
     navigator.clipboard.writeText(ipInfo.ip)
@@ -494,6 +423,14 @@ const IPPage: React.FC = () => {
   return (
     <BasePage title={t('network.title')}>
       <div className="m-2 flex flex-col gap-4">
+        <div className="rounded-xl border border-foreground/10 bg-content1 px-4 py-3 text-xs leading-relaxed text-foreground/65">
+          <span className="font-medium text-foreground">按需查询，保留你的选择</span>
+          <HelpTip topic="network" />
+          <p>
+            进入本页不会自动查询公网 IP 或测试外部网站。点击查询后，所选服务会看到本次请求的公网出口
+            IP。结果仅在当前页面使用，不显示或保存精确位置；网络拓扑来自本机内核。
+          </p>
+        </div>
         <div style={{ overflowX: 'clip' }} className="flex flex-col gap-4">
           <DndContext
             sensors={sensors}
@@ -516,13 +453,17 @@ const IPPage: React.FC = () => {
                       <Select
                         size="sm"
                         className="w-28"
+                        aria-label="选择公网 IP 查询服务"
                         selectedKeys={[provider]}
                         onSelectionChange={(keys) => {
                           const val = Array.from(keys)[0] as IPProvider
                           if (val) {
                             setProvider(val)
                             patchAppConfig({ networkIPProvider: val })
-                            fetchIP(val)
+                            ++fetchIdRef.current
+                            setIpInfo(null)
+                            setError(null)
+                            setLoading(false)
                           }
                         }}
                       >
@@ -532,13 +473,14 @@ const IPPage: React.FC = () => {
                       </Select>
                       <Button
                         size="sm"
-                        isIconOnly
-                        variant="light"
+                        variant="flat"
                         isLoading={loading}
+                        aria-label="查询公网出口"
                         onPress={() => fetchIP()}
-                        className="h-7 w-7 min-w-0"
+                        className="h-8"
                       >
                         <IoRefresh size={16} />
+                        查询出口
                       </Button>
                     </div>
                   </div>
@@ -570,6 +512,7 @@ const IPPage: React.FC = () => {
                             {hidden ? '••••••••••••••' : ipInfo.ip}
                           </span>
                           <button
+                            aria-label={hidden ? '显示公网 IP' : '隐藏公网 IP'}
                             onClick={() => setHidden((h) => !h)}
                             className="shrink-0 text-primary/60 hover:text-primary transition-colors"
                           >
@@ -577,6 +520,7 @@ const IPPage: React.FC = () => {
                           </button>
                           <Tooltip content={copied ? t('network.copied') : t('network.copy')}>
                             <button
+                              aria-label="复制公网 IP"
                               onClick={handleCopy}
                               className="shrink-0 text-primary/60 hover:text-primary transition-colors"
                             >
@@ -597,25 +541,32 @@ const IPPage: React.FC = () => {
                           }
                         />
                       )}
-                      {ipInfo.region && (
-                        <InfoRow label={t('network.region')} value={ipInfo.region} />
-                      )}
-                      {ipInfo.city && <InfoRow label={t('network.city')} value={ipInfo.city} />}
-                      {ipInfo.timezone && (
-                        <InfoRow label={t('network.timezone')} value={ipInfo.timezone} />
-                      )}
-                      {ipInfo.latitude != null && ipInfo.longitude != null && (
+                      {ipInfo.asn != null && (
                         <InfoRow
-                          label={t('network.coordinates')}
-                          value={`${ipInfo.latitude.toFixed(4)}, ${ipInfo.longitude.toFixed(4)}`}
+                          label={
+                            <>
+                              ASN · 网络编号
+                              <HelpTip topic="asn" />
+                            </>
+                          }
+                          value={`AS${ipInfo.asn}`}
                           mono
                         />
                       )}
-                      {ipInfo.asn != null && <InfoRow label="ASN" value={`AS${ipInfo.asn}`} mono />}
                       {ipInfo.org && (
                         <InfoRow label={t('network.organization')} value={ipInfo.org} />
                       )}
-                      {ipInfo.isp && <InfoRow label="ISP" value={ipInfo.isp} />}
+                      {ipInfo.isp && (
+                        <InfoRow
+                          label={
+                            <>
+                              ISP · 网络服务商
+                              <HelpTip topic="isp" />
+                            </>
+                          }
+                          value={ipInfo.isp}
+                        />
+                      )}
 
                       {(ipInfo.isProxy !== undefined || ipInfo.isVPN !== undefined) && (
                         <div className="flex items-center justify-between gap-3">
@@ -661,7 +612,7 @@ const IPPage: React.FC = () => {
 
                   {!loading && !error && !ipInfo && (
                     <div className="py-6 text-center text-sm text-foreground/50">
-                      {t('network.noData')}
+                      尚未查询。选择服务后点击「查询出口」。
                     </div>
                   )}
                 </div>
@@ -710,17 +661,23 @@ const IPPage: React.FC = () => {
                       </Tooltip>
                       <Button
                         size="sm"
-                        isIconOnly
-                        variant="light"
+                        variant="flat"
                         isLoading={testingLatency}
                         isDisabled={testingLatency}
+                        aria-label="开始网络检测"
                         onPress={testAllLatencies}
-                        className="h-7 w-7 min-w-0"
+                        className="h-8"
                       >
                         <IoRefresh size={16} />
+                        开始检测
                       </Button>
                     </div>
                   </div>
+
+                  <p className="mb-3 text-xs leading-relaxed text-foreground/55">
+                    点击「开始检测」会请求下方列出的网站，这些网站会看到检测请求的公网出口
+                    IP。耗时含请求过程，不代表下载速度。
+                  </p>
 
                   {isAddingLatencyTarget && (
                     <div className="mb-3 flex flex-wrap items-start gap-2">

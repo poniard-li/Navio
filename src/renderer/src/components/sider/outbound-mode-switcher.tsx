@@ -1,10 +1,11 @@
-import { Tabs, Tab } from '@heroui/react'
+import { Tabs, Tab, Tooltip } from '@heroui/react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { useGroups } from '@renderer/hooks/use-groups'
-import { mihomoCloseAllConnections, patchMihomoConfig, updateTrayIcon } from '@renderer/utils/ipc'
+import { mihomoCloseAllConnections, updateTrayIcon } from '@renderer/utils/ipc'
 import { Key } from 'react'
 import { useTranslation } from 'react-i18next'
+import { usesGlobalBypass } from '../../../../shared/dex-bypass'
 
 interface Props {
   iconOnly?: boolean
@@ -18,10 +19,17 @@ const OutboundModeSwitcher: React.FC<Props> = ({ iconOnly, expanded = false }: P
   const { appConfig } = useAppConfig()
   const { autoCloseConnection = true, disableAnimations = false } = appConfig || {}
   const { mode } = controledMihomoConfig || {}
+  const exceptions = usesGlobalBypass('global', appConfig?.dexBypass)
+  const globalTitle = exceptions ? (
+    <Tooltip content="全局 · 含直连例外。选中的应用与网站直连，其余使用 GLOBAL 节点。">
+      <span>全局 · 例外</span>
+    </Tooltip>
+  ) : (
+    t('sider.cards.outbound.global')
+  )
 
   const onChangeMode = async (mode: OutboundMode): Promise<void> => {
     await patchControledMihomoConfig({ mode })
-    await patchMihomoConfig({ mode })
     if (autoCloseConnection) {
       await mihomoCloseAllConnections()
     }
@@ -60,7 +68,7 @@ const OutboundModeSwitcher: React.FC<Props> = ({ iconOnly, expanded = false }: P
               <span className="flex items-center">
                 <span className="sider-mode-icon">{value[0].toUpperCase()}</span>
                 <span className="sider-item-label" aria-hidden={!expanded}>
-                  {t(`sider.cards.outbound.${value}`)}
+                  {value === 'global' ? globalTitle : t(`sider.cards.outbound.${value}`)}
                 </span>
               </span>
             }
@@ -86,11 +94,7 @@ const OutboundModeSwitcher: React.FC<Props> = ({ iconOnly, expanded = false }: P
         key="rule"
         title={t('sider.cards.outbound.rule')}
       />
-      <Tab
-        className={`${mode === 'global' ? 'font-bold' : ''}`}
-        key="global"
-        title={t('sider.cards.outbound.global')}
-      />
+      <Tab className={`${mode === 'global' ? 'font-bold' : ''}`} key="global" title={globalTitle} />
       <Tab
         className={`${mode === 'direct' ? 'font-bold' : ''}`}
         key="direct"

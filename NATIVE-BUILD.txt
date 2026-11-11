@@ -1,0 +1,43 @@
+Native configuration build
+==========================
+
+Requires Node.js 24 or newer and the dependencies pinned by pnpm-lock.yaml.
+From the project directory, run:
+
+    node scripts/build-native.mjs
+
+This produces the same out/main, out/preload and out/renderer layout used by
+scripts/package-pinned.cjs. It loads electron.vite.config.ts with Node's native
+TypeScript support and combines that config with the installed Electron Vite
+presets obtained through its public resolveConfig API. React, Tailwind, Monaco,
+dependency externalization, CommonJS handling, entry points, aliases, defines,
+Electron target selection and Electron-specific asset transforms remain active.
+No installed dependency is modified. Main, preload and renderer build in order.
+For incremental verification after a change confined to one process, use:
+
+    node scripts/build-native.mjs --scope main
+
+The other supported scopes are preload and renderer. Release builds should use
+the full command unless unchanged scopes were already built from the same source.
+
+This entry point is useful on restricted Windows hosts where electron-vite 4's
+esbuild config bundling cannot scan a protected ancestor directory. It does not
+change filesystem permissions. The normal electron-vite build is still usable
+on unrestricted development hosts.
+
+BUILD_MODE optionally selects a Vite mode; the default is production. Existing
+LEGACY_BUILD handling is preserved by the source config, but only the default
+modern Windows build is verified for this preview.
+
+Monaco's upstream plugin uses node_modules/.monaco for its worker build cache.
+It reuses existing workers and builds missing workers through its normal path.
+On a newly installed dependency tree, a missing-worker build can still require
+an environment in which esbuild can resolve its dependencies. Do not substitute
+workers from a different Monaco dependency version.
+
+Tests can avoid their separate config-bundling step with:
+
+    node node_modules/vitest/vitest.mjs run --configLoader native
+
+On Windows, src/main/utils/app-info/linux.test.ts requires POSIX symlink behavior
+and is excluded from the preview validation command documented with the release.

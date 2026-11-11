@@ -94,7 +94,7 @@ const definitions = [
   {
     id: 'glacier',
     name: '冰川白',
-    author: 'D.E.X STUDIO',
+    author: 'D.E.X Studio',
     description: '通透的白色与清晰的蓝，留出专注的空间。',
     appearance: 'light',
     radius: 20,
@@ -113,7 +113,7 @@ const definitions = [
   {
     id: 'graphite',
     name: '石墨黑',
-    author: 'D.E.X STUDIO',
+    author: 'D.E.X Studio',
     description: '柔和的石墨灰，配以明亮而沉静的蓝。',
     appearance: 'dark',
     radius: 20,
@@ -132,7 +132,7 @@ const definitions = [
   {
     id: 'obsidian',
     name: '曜石 · Obsidian',
-    author: 'D.E.X STUDIO',
+    author: 'D.E.X Studio',
     description: '深曜黑与暖琥珀，安静而有力量。',
     appearance: 'dark',
     radius: 16,
@@ -151,7 +151,7 @@ const definitions = [
   {
     id: 'porcelain',
     name: '瓷白 · Porcelain',
-    author: 'D.E.X STUDIO',
+    author: 'D.E.X Studio',
     description: '温润的瓷白，搭配明亮而克制的橙。',
     appearance: 'light',
     radius: 16,
@@ -170,7 +170,7 @@ const definitions = [
   {
     id: 'midnight',
     name: '深海 · Midnight',
-    author: 'D.E.X STUDIO',
+    author: 'D.E.X Studio',
     description: '午夜蓝、冷青与清晰的层次。',
     appearance: 'dark',
     radius: 18,
@@ -189,7 +189,7 @@ const definitions = [
   {
     id: 'rose',
     name: '暮玫 · Rose',
-    author: 'D.E.X STUDIO',
+    author: 'D.E.X Studio',
     description: '暖灰色的背景，留下柔和的玫瑰余韵。',
     appearance: 'dark',
     radius: 20,

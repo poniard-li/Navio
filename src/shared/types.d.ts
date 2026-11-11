@@ -283,9 +283,15 @@ interface ISmartModelStatus {
 }
 
 interface IAppConfig {
+  dexBypass?: import('./dex-bypass').DexBypassConfig
   dexNavigation?: 'studio' | 'classic'
   operationMode?: 'standard' | 'simple'
   modeSelected?: boolean
+  dexOnboarding?: {
+    version: number
+    status: 'completed' | 'skipped'
+    completedAt: string
+  }
   core: 'mihomo' | 'mihomo-alpha' | 'mihomo-smart' | 'mihomo-specific'
   specificVersion?: string
   enableSmartCore: boolean

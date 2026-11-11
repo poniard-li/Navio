@@ -2,8 +2,8 @@ import { describe, expect, it } from 'vitest'
 import { defaultConfig, defaultControledMihomoConfig } from './template'
 
 describe('DEX first-start defaults', () => {
-  it('opens the complete standard client without taking over the network', () => {
-    expect(defaultConfig.modeSelected).toBe(true)
+  it('requires an initial mode choice without taking over the network', () => {
+    expect(defaultConfig.modeSelected).toBe(false)
     expect(defaultConfig.operationMode).toBe('standard')
     expect(defaultConfig.sysProxy.enable).toBe(false)
     expect(defaultControledMihomoConfig.tun?.enable).toBe(false)

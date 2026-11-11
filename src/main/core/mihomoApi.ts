@@ -10,6 +10,7 @@ import { floatingWindow } from '../resolve/floatingWindow'
 import { recordTrafficUsage } from '../traffic/recorder'
 import { createLogger } from '../utils/logger'
 import { mihomoWorkConfigPath } from '../utils/dirs'
+import { bypassRules, usesGlobalBypass } from '../../shared/dex-bypass'
 import { generateProfile, getRuntimeConfig } from './factory'
 import { syncControlDnsAfterApply } from './dnsOverrideGuard'
 import { getMihomoIpcPath, hasCoreProcess, restartCore } from './manager'
@@ -208,9 +209,24 @@ export async function mihomoVersion(): Promise<IMihomoVersion> {
 }
 
 export const patchMihomoConfig = async (patch: Partial<IMihomoConfig>): Promise<void> => {
+  // All callers, including tray/SSID and legacy renderer patches, must retain exception routing.
+  const effectivePatch =
+    patch.mode && usesGlobalBypass(patch.mode, (await getAppConfig()).dexBypass)
+      ? { ...patch, mode: 'rule' as const }
+      : { ...patch }
+  if ('find-process-mode' in patch) {
+    const policy = (await getAppConfig()).dexBypass
+    const intendedMode = patch.mode ?? (await getControledMihomoConfig()).mode
+    if (
+      usesGlobalBypass(intendedMode, policy) &&
+      bypassRules(policy).some((rule) => rule.startsWith('PROCESS-NAME,'))
+    ) {
+      effectivePatch['find-process-mode'] = 'always'
+    }
+  }
   const patchConfig = async (): Promise<void> => {
     const instance = await getAxios()
-    await instance.patch('/configs', patch)
+    await instance.patch('/configs', effectivePatch)
   }
 
   // Configuration patches can also be the first recovery action after startup

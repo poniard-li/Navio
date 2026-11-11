@@ -9,13 +9,13 @@ function MihomoIcon(props: IconBaseProps): React.JSX.Element {
       {
         tag: 'path',
         attr: {
-          d: 'M5 5h10c7 0 12 4.5 12 11S22 27 15 27H5V5Zm5 5v12h5c4.4 0 7-2.3 7-6s-2.6-6-7-6h-5Z',
+          d: 'M5 25V7a2 2 0 0 1 3.6-1.2L23 24V7h4v18a2 2 0 0 1-3.6 1.2L9 8v17H5Z',
           fill: 'currentColor',
           fillRule: 'evenodd'
         },
         child: []
       },
-      { tag: 'path', attr: { d: 'M2 14h12v4H2z', fill: 'currentColor' }, child: [] }
+      { tag: 'path', attr: { d: 'M20 3h9v9h-2V5h-7z', fill: 'currentColor' }, child: [] }
     ]
   })(props)
 }

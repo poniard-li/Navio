@@ -11,6 +11,7 @@ import React, { Key, useState } from 'react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { MdDeleteForever } from 'react-icons/md'
 import { useTranslation } from 'react-i18next'
+import { FeatureIntro, HelpTip } from '@renderer/components/dex/feature-help'
 import { DEFAULT_MIHOMO_TUN_CONFIG, getDefaultMihomoTunDevice } from '../../../shared/appConfig'
 
 const Tun: React.FC = () => {
@@ -134,6 +135,7 @@ const Tun: React.FC = () => {
           )
         }
       >
+        <FeatureIntro topic="tun" />
         <SettingCard className="tun-settings">
           {platform === 'win32' && (
             <SettingItem title={t('tun.firewall.title')} divider>
@@ -189,7 +191,18 @@ const Tun: React.FC = () => {
             </SettingItem>
           )}
 
-          <SettingItem title={t('tun.stack.title')} divider>
+          <SettingItem
+            title={
+              <>
+                {t('tun.stack.title')}
+                <HelpTip
+                  title="TUN 协议栈"
+                  content="协议栈处理虚拟网卡内的数据包。不同实现的兼容性、性能和资源占用不同；只有遇到游戏、UDP 或连接异常时才建议尝试切换，改完需要重新连接验证。"
+                />
+              </>
+            }
+            divider
+          >
             <Tabs
               size="sm"
               color="primary"
@@ -214,7 +227,18 @@ const Tun: React.FC = () => {
             />
           </SettingItem>
 
-          <SettingItem title={t('tun.strictRoute')} divider>
+          <SettingItem
+            title={
+              <>
+                {t('tun.strictRoute')}
+                <HelpTip
+                  title="严格路由"
+                  content="收紧系统路由，减少流量绕过 TUN 的情况。在 Windows 上可能影响部分应用的连通性检测或局域网访问；出现问题可关闭后重试。"
+                />
+              </>
+            }
+            divider
+          >
             <Switch
               size="sm"
               isSelected={values.strictRoute}
@@ -267,7 +291,18 @@ const Tun: React.FC = () => {
               }}
             />
           </SettingItem>
-          <SettingItem title={t('tun.dnsHijack')} divider>
+          <SettingItem
+            title={
+              <>
+                {t('tun.dnsHijack')}
+                <HelpTip
+                  title="DNS 劫持"
+                  content="将符合地址和端口条件的 DNS 请求交给内核 DNS 处理，以统一解析和分流。它不会自动接管所有加密 DNS；错误设置可能导致域名无法解析。"
+                />
+              </>
+            }
+            divider
+          >
             <Input
               size="sm"
               className="w-[50%]"

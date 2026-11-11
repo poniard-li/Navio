@@ -13,6 +13,7 @@ import { useAppConfig } from '@renderer/hooks/use-app-config'
 import debounce from '@renderer/utils/debounce'
 import { isValidCron } from 'cron-validator'
 import { useTranslation } from 'react-i18next'
+import { HelpTip } from '@renderer/components/dex/feature-help'
 import { DEFAULT_USE_SUB_STORE } from '../../../../shared/appConfig'
 
 const SubStoreConfig: React.FC = () => {
@@ -42,7 +43,15 @@ const SubStoreConfig: React.FC = () => {
     useState(subStoreBackendUploadCron)
   return (
     <SettingCard title={t('substore.title')}>
-      <SettingItem title={t('substore.enable')} divider={useSubStore}>
+      <SettingItem
+        title={
+          <>
+            {t('substore.enable')}
+            <HelpTip topic="substore" />
+          </>
+        }
+        divider={useSubStore}
+      >
         <Switch
           size="sm"
           isSelected={useSubStore}

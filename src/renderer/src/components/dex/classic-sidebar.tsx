@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next'
 import { LuPalette, LuPanelLeftClose, LuPanelLeftOpen, LuSettings2, LuSearch } from 'react-icons/lu'
 import MihomoIcon from '../base/mihomo-icon'
 import OutboundModeSwitcher from '../sider/outbound-mode-switcher'
+import { PRODUCT_NAME } from '../../../../shared/product'
 import FeatureSearch from './feature-search'
 
 const SiderCards = lazy(() => import('../sider/sider-cards'))
@@ -48,9 +49,7 @@ export default function ClassicSidebar({
         <span className="dex-brand-symbol">
           <MihomoIcon size={25} />
         </span>
-        <span className="dex-brand-word">
-          D.E.X <small>STUDIO</small>
-        </span>
+        <span className="dex-brand-word">{PRODUCT_NAME}</span>
         <button
           type="button"
           className="dex-collapse app-nodrag"

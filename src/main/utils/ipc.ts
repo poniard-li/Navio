@@ -1,8 +1,13 @@
 import path from 'path'
 import v8 from 'v8'
 import { readFile } from 'fs/promises'
-import { app, ipcMain } from 'electron'
+import { app, ipcMain, session } from 'electron'
 import i18next from 'i18next'
+import {
+  ipInfoProviderForUrl,
+  normalizeNetworkIPInfo,
+  type NetworkIPInfo
+} from '../../shared/network-info'
 import {
   mihomoChangeProxy,
   mihomoCloseAllConnections,
@@ -235,9 +240,18 @@ async function getSmartOverrideContent(): Promise<string | null> {
   }
 }
 
-async function fetchIPInfo(url: string): Promise<unknown> {
-  const res = await httpGet<unknown>(url, { timeout: 10000, responseType: 'json' })
-  return res.data
+async function fetchIPInfo(url: string): Promise<NetworkIPInfo> {
+  const provider = ipInfoProviderForUrl(url)
+  // An in-memory, non-caching session keeps provider location payloads out of
+  // the persistent browser cache and does not send stored cookies.
+  const response = await session.fromPartition('dex-network-info', { cache: false }).fetch(url, {
+    cache: 'no-store',
+    credentials: 'omit',
+    redirect: 'error',
+    signal: AbortSignal.timeout(10000)
+  })
+  if (!response.ok) throw new Error(`查询服务暂不可用（${response.status}）`)
+  return normalizeNetworkIPInfo(provider, await response.json())
 }
 
 async function measureLatency(url: string): Promise<number | null> {
@@ -262,6 +276,8 @@ async function setTitleBarOverlay(overlay: Electron.TitleBarOverlayOptions): Pro
 }
 
 const asyncHandlers: Record<string, AsyncFn> = {
+  saveDexBypass: async (value: unknown) =>
+    (await import('../resolve/dex-bypass')).saveDexBypass(value),
   // Mihomo API
   mihomoVersion,
   mihomoCloseConnection,

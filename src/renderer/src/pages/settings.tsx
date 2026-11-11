@@ -11,6 +11,7 @@ import LocalBackupConfig from '@renderer/components/settings/local-backup-config
 import { useTranslation } from 'react-i18next'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useNavigate } from 'react-router-dom'
+import { PRODUCT_NAME, DEVELOPER_NAME, PRODUCT_NAME_PENDING } from '../../../shared/product'
 
 const Settings: React.FC = () => {
   const { t } = useTranslation()
@@ -22,7 +23,7 @@ const Settings: React.FC = () => {
       title={t('settings.title')}
       header={
         <>
-          <span className="text-xs text-default-500 app-nodrag">D.E.X STUDIO</span>
+          <span className="text-xs text-default-500 app-nodrag">由 {DEVELOPER_NAME} 开发</span>
         </>
       }
     >
@@ -36,6 +37,25 @@ const Settings: React.FC = () => {
         classNames={{ base: 'px-3 sticky top-0 z-10 bg-background', panel: 'pt-1' }}
       >
         <Tab key="general" title="通用">
+          <div className="m-3 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-default-200 p-5">
+            <div>
+              <h3 className="font-medium">使用指南</h3>
+              <p className="mt-1 text-small text-default-500">
+                回顾操作步骤，了解高级功能和网络信息的含义。
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button
+                variant="flat"
+                onPress={() => window.dispatchEvent(new Event('dex-open-guide'))}
+              >
+                重新查看引导
+              </Button>
+              <Button variant="light" onPress={() => navigate('/help')}>
+                功能说明
+              </Button>
+            </div>
+          </div>
           <GeneralConfig />
         </Tab>
         <Tab key="appearance" title="界面">
@@ -43,7 +63,7 @@ const Settings: React.FC = () => {
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h3 className="font-medium">主题工坊</h3>
-                <p className="text-small text-default-500 mt-1">创建、导入和分享 D.E.X 主题。</p>
+                <p className="text-small text-default-500 mt-1">创建、导入和分享你的主题设计。</p>
               </div>
               <Button onPress={() => navigate('/dex-themes')}>打开主题工坊</Button>
             </div>
@@ -82,12 +102,10 @@ const Settings: React.FC = () => {
         </Tab>
         <Tab key="about" title="关于">
           <div className="m-3 rounded-xl border border-default-200 p-5">
-            <h3 className="text-lg font-semibold">
-              D.E.X <span className="font-normal text-default-500">STUDIO</span>
-            </h3>
+            <h3 className="text-lg font-semibold">{PRODUCT_NAME}</h3>
             <p className="text-small text-default-500 mt-2 leading-relaxed">
-              D.E.X 的产品设计与主题工坊，结合 Clash Party 的完整客户端功能与 Mihomo 内核。此版本为
-              0.3 功能重建预览版。
+              由 {DEVELOPER_NAME} 开发，基于 Clash Party 客户端与 Mihomo 内核构建。 此版本为 0.4
+              功能预览版。{PRODUCT_NAME_PENDING && '产品名称待定。'}
             </p>
             <div className="flex flex-wrap gap-2 mt-4">
               <Button
