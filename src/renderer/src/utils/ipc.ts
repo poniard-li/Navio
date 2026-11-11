@@ -9,6 +9,10 @@ import type {
 export type {
   DexAccount,
   DexAccountSecurity,
+  DexAccountMutation,
+  DexSecurityProof,
+  DexUnlinkTarget,
+  DexUser,
   DexServiceStatus,
   DexOAuthRequest,
   DexOAuthResult

@@ -17,12 +17,14 @@ import {
   type DexAccount,
   type DexAccountSecurity,
   type DexOAuthRequest,
-  type DexServiceStatus
+  type DexServiceStatus,
+  type DexUnlinkTarget
 } from '@renderer/utils/ipc'
 import { toast } from '@renderer/components/base/toast'
 import BaseConfirmModal from '../base/base-confirm-modal'
 import { AccountCodeField } from '../dex/account-form'
 import OAuthFlow from '../dex/oauth-flow'
+import AccountUnlinkModal from './account-unlink-modal'
 
 export default function AccountConfig(): React.JSX.Element {
   const [account, setAccount] = useState<DexAccount>()
@@ -38,6 +40,7 @@ export default function AccountConfig(): React.JSX.Element {
   const [contact, setContact] = useState('')
   const [code, setCode] = useState('')
   const [oauth, setOAuth] = useState<DexOAuthRequest>()
+  const [unlinking, setUnlinking] = useState<DexUnlinkTarget>()
   const [confirm, setConfirm] = useState<{
     title: string
     content: string
@@ -47,9 +50,11 @@ export default function AccountConfig(): React.JSX.Element {
     const result = await getDexAccount()
     setAccount(result)
     if (result.status === 'signed-out') {
+      setSecurity(undefined)
       window.dispatchEvent(new Event('dex-account-updated'))
       return
     }
+    if (result.status === 'offline') setSecurity(undefined)
     if (result.status === 'online') {
       const [info, service] = await Promise.all([
         dexAccountAction<DexAccountSecurity>('security'),
@@ -74,7 +79,7 @@ export default function AccountConfig(): React.JSX.Element {
     setError('')
   }
   const revoke = (
-    kind: 'revoke-device' | 'unlink-provider' | 'revoke-grant',
+    kind: 'revoke-device' | 'revoke-grant',
     target: string,
     title: string,
     content: string
@@ -155,8 +160,36 @@ export default function AccountConfig(): React.JSX.Element {
         <div className="rounded-xl bg-default-100 p-4 space-y-3">
           <h4 className="font-medium">账号资料</h4>
           <p className="text-default-500 break-all">用户名：{account?.user?.username || '—'}</p>
-          <p className="text-default-500 break-all">邮箱：{account?.user?.email || '未绑定'}</p>
-          <p className="text-default-500 break-all">手机号：{account?.user?.phone || '未绑定'}</p>
+          {(['email', 'phone'] as const).map((kind) => {
+            const value = account?.user?.[kind]
+            const alternate = account?.user?.[kind === 'email' ? 'phone' : 'email']
+            const label = kind === 'email' ? '邮箱' : '手机号'
+            return (
+              <div key={kind} className="flex justify-between items-center gap-3">
+                <p className="text-default-500 break-all">
+                  {label}：{value || '未绑定'}
+                </p>
+                {value && (
+                  <Button
+                    size="sm"
+                    variant="light"
+                    className="shrink-0"
+                    aria-label={`解除${label}绑定`}
+                    isDisabled={!online || busy || !alternate}
+                    onPress={() => {
+                      setError('')
+                      setUnlinking({ kind: 'contact', target: kind })
+                    }}
+                  >
+                    解除绑定
+                  </Button>
+                )}
+              </div>
+            )
+          })}
+          <p className="text-xs text-default-500 leading-5">
+            至少保留一个已验证的邮箱或手机号。只有一种联系方式时，请先绑定另一种，再解除原绑定。
+          </p>
           <div className="flex flex-wrap gap-2">
             <Button
               size="sm"
@@ -196,15 +229,13 @@ export default function AccountConfig(): React.JSX.Element {
                 <Button
                   size="sm"
                   variant="light"
-                  isDisabled={!online || busy || (!linked && !status?.providers[provider])}
+                  isDisabled={
+                    !online || busy || !security || (!linked && !status?.providers[provider])
+                  }
                   onPress={async () => {
                     if (linked) {
-                      revoke(
-                        'unlink-provider',
-                        provider,
-                        `解除 ${provider} 绑定？`,
-                        '解除后，这个第三方账号将无法登录当前 D.E.X 账号。你仍可使用已绑定的邮箱、手机号或密码登录。'
-                      )
+                      setError('')
+                      setUnlinking({ kind: 'provider', target: provider })
                       return
                     }
                     setBusy(true)
@@ -317,6 +348,23 @@ export default function AccountConfig(): React.JSX.Element {
             } finally {
               setBusy(false)
             }
+          }}
+        />
+      )}
+      {unlinking && account?.user && (
+        <AccountUnlinkModal
+          user={account.user}
+          target={unlinking}
+          status={status}
+          onClose={() => setUnlinking(undefined)}
+          onComplete={(user) => {
+            setAccount((current) => (current ? { ...current, user } : current))
+            setSecurity(undefined)
+            setUnlinking(undefined)
+            toast.success('已解除绑定，其他设备需要重新登录')
+            void refresh().catch(() =>
+              setError('绑定已解除，安全状态暂时无法刷新，请稍后刷新状态。')
+            )
           }}
         />
       )}

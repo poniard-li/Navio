@@ -23,6 +23,15 @@ export interface DexAccountSecurity {
   providers: { provider: 'google' | 'github'; createdAt: string }[]
   grants: { appId: string; createdAt: string }[]
 }
+export type DexSecurityProof =
+  | { currentPassword: string; contact?: never; code?: never }
+  | { currentPassword?: never; contact: string; code: string }
+export type DexUnlinkTarget =
+  { kind: 'contact'; target: 'email' | 'phone' } | { kind: 'provider'; target: 'google' | 'github' }
+export interface DexAccountMutation {
+  ok: true
+  user: DexUser
+}
 export type DexAccountAction =
   | 'status'
   | 'login'
@@ -33,6 +42,7 @@ export type DexAccountAction =
   | 'profile'
   | 'password'
   | 'contact'
+  | 'unlink-contact'
   | 'security'
   | 'revoke-device'
   | 'unlink-provider'

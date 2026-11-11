@@ -2,7 +2,7 @@
 
 Built by D.E.X Studio · Windows x64 · Public Beta（公测版）
 
-当前客户端版本：`0.6.0-beta.4`。安装版、免安装版和对应源码见 [GitHub Releases](https://github.com/poniard-li/Navio/releases)。
+当前客户端版本：`0.6.0-beta.5`。已发布版本的安装包、免安装包和对应源码见 [GitHub Releases](https://github.com/poniard-li/Navio/releases)。
 
 Navio 基于 Clash Party 2.0.4 客户端与 Mihomo 内核开发。上游及第三方来源见 [鸣谢与许可说明](DEX-THIRD-PARTY-NOTICES.txt)，客户端遵循 [GPL-3.0-only](LICENSE)。
 
@@ -11,6 +11,7 @@ Navio 基于 Clash Party 2.0.4 客户端与 Mihomo 内核开发。上游及第�
 - 安装版：运行 `setup.exe`，本机数据保存在 `%APPDATA%\DEX-STUDIO-NEXT`，卸载时保留。
 - 免安装版：解压完整 `portable.zip` 后运行 `Navio.exe`，本机数据保存在程序旁的 `DEX-STUDIO-NEXT` 目录。
 - 首次使用需要可用的 D.E.X 账号服务。注册、密码或验证码登录、找回密码、绑定和设备管理在软件内完成。Google / GitHub 授权使用系统浏览器。
+- 在“设置 → 账号”中解除邮箱、手机号或 Google / GitHub 绑定，需要当前密码或已绑定联系方式的验证码；请保留另一种联系方式。解绑后本机继续登录，其他设备需要重新登录。此功能需要 D.E.X Platform 0.7.0-beta.4 及以上版本。
 - 已登录设备在账号服务暂时不可用时保留本机离线使用；订阅和节点凭据不上传 D.E.X 官方云。
 - 构建流程及固定资源来源见 [DEX-BUILD.txt](DEX-BUILD.txt)。测试范围和未验证项见 [Navio-验证记录.txt](Navio-验证记录.txt)。
 

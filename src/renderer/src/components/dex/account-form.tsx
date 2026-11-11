@@ -10,7 +10,7 @@ export function AccountCodeField({
   disabled = false
 }: {
   contact: string
-  purpose: 'register' | 'login' | 'reset' | 'bind'
+  purpose: 'register' | 'login' | 'reset' | 'bind' | 'security'
   code: string
   onCode: (value: string) => void
   disabled?: boolean

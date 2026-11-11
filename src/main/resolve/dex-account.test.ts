@@ -279,6 +279,9 @@ describe('in-app account operations', () => {
     await expect(
       account.dexAccountAction('otp-request', { purpose: 'bind', contact: 'test@example.com' })
     ).rejects.toThrow('请先登录')
+    await expect(
+      account.dexAccountAction('otp-request', { purpose: 'security', contact: 'test@example.com' })
+    ).rejects.toThrow('请先登录')
     await expect(account.dexAccountAction('security')).rejects.toThrow('请先登录')
     expect(mocks.fetch).not.toHaveBeenCalled()
   })
@@ -315,6 +318,223 @@ describe('in-app account operations', () => {
     await expect(pending).rejects.toThrow('登录状态已更改')
     await assertNoVault()
   })
+})
+
+describe('verified account unlinking', () => {
+  const updatedUser = { ...user, email: null, phone: '+8613800000000', hasPassword: true }
+
+  it('sends security OTP requests with the current session through the desktop wrapper', async () => {
+    await login()
+    mocks.fetch.mockClear()
+    mocks.fetch.mockResolvedValueOnce(response({ ok: true }))
+    await account.dexAccountAction('otp-request', {
+      purpose: 'security',
+      contact: 'bound@example.com'
+    })
+    const [url, options] = mocks.fetch.mock.calls[0]
+    expect(url).toBe(`${origin}/api/v1/desktop/auth/otp/request`)
+    expect(new Headers(options.headers).get('Authorization')).toBe(`Bearer ${accessToken}`)
+    expect(JSON.parse(options.body)).toMatchObject({
+      purpose: 'security',
+      contact: 'bound@example.com'
+    })
+  })
+
+  it.each([
+    ['unlink-contact', 'email', 'contacts/email'],
+    ['unlink-contact', 'phone', 'contacts/phone'],
+    ['unlink-provider', 'google', 'providers/google'],
+    ['unlink-provider', 'github', 'providers/github']
+  ] as const)(
+    'sends password proof in the DELETE body for %s/%s and saves only the returned user',
+    async (action, target, path) => {
+      await login()
+      mocks.fetch.mockClear()
+      mocks.encrypt.mockClear()
+      mocks.fetch.mockResolvedValueOnce(response({ ok: true, user: updatedUser }))
+      const proof = { currentPassword: ' isolated-password-for-unlink ' }
+      const result = await account.dexAccountAction(action, { target, ...proof, extra: 'ignored' })
+      expect(result).toEqual({ ok: true, user: updatedUser })
+      expect(JSON.stringify(result)).not.toContain(accessToken)
+      const [url, options] = mocks.fetch.mock.calls[0]
+      expect(url).toBe(`${origin}/api/v1/account/${path}`)
+      expect(options.method).toBe('DELETE')
+      expect(JSON.parse(options.body)).toEqual(proof)
+      expect(new Headers(options.headers).get('Authorization')).toBe(`Bearer ${accessToken}`)
+      const stored = JSON.parse(mocks.decrypt(await readFile(vaultFile())))
+      expect(stored).toEqual({ serverUrl: origin, accessToken, user: updatedUser })
+      expect(JSON.stringify(stored)).not.toContain(proof.currentPassword)
+      expect(mocks.encrypt).not.toHaveBeenCalledWith(expect.stringContaining(proof.currentPassword))
+      mocks.fetch.mockRejectedValueOnce(new TypeError('Offline after unlink'))
+      expect(await account.getDexAccount()).toEqual({
+        status: 'offline',
+        serverUrl: origin,
+        user: updatedUser
+      })
+    }
+  )
+
+  it.each(['unlink-contact', 'unlink-provider'] as const)(
+    'sends only the bound-contact code proof for %s',
+    async (action) => {
+      await login()
+      mocks.fetch.mockClear()
+      mocks.fetch.mockResolvedValueOnce(response({ ok: true, user: updatedUser }))
+      await account.dexAccountAction(action, {
+        target: action === 'unlink-contact' ? 'email' : 'google',
+        contact: ' bound@example.com ',
+        code: '473921'
+      })
+      expect(JSON.parse(mocks.fetch.mock.calls[0][1].body)).toEqual({
+        contact: 'bound@example.com',
+        code: '473921'
+      })
+      const stored = mocks.decrypt(await readFile(vaultFile()))
+      expect(stored).not.toContain('473921')
+      expect(stored).not.toContain('bound@example.com')
+    }
+  )
+
+  it.each([
+    { target: 'email' },
+    { target: 'email', currentPassword: '' },
+    { target: 'email', currentPassword: 'x'.repeat(129) },
+    { target: 'email', currentPassword: 'password', contact: 'bound@example.com', code: '123456' },
+    { target: 'email', contact: 'bound@example.com', code: '12345' },
+    { target: 'email', contact: 'bound@example.com', code: 'abc123' },
+    { target: 'email', contact: '', code: '123456' },
+    { target: 'email', contact: 123, code: '123456' }
+  ])('rejects missing, mixed or invalid verification proof before sending: %#', async (payload) => {
+    await expect(account.dexAccountAction('unlink-contact', payload)).rejects.toThrow('完成验证')
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it.each([
+    ['unlink-contact', 'google'],
+    ['unlink-contact', '../email'],
+    ['unlink-provider', 'email'],
+    ['unlink-provider', 'microsoft']
+  ] as const)('rejects unsupported unlink targets %s/%s', async (action, target) => {
+    await expect(
+      account.dexAccountAction(action, { target, currentPassword: 'password' })
+    ).rejects.toThrow('目标无效')
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('does not unlink without a current session even with valid-shaped proof', async () => {
+    await expect(
+      account.dexAccountAction('unlink-contact', {
+        target: 'email',
+        currentPassword: 'password'
+      })
+    ).rejects.toThrow('请先登录')
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('preserves the cached user when the server refuses removal of the last contact', async () => {
+    await login()
+    const original = await readFile(vaultFile())
+    mocks.fetch.mockResolvedValueOnce(
+      response(
+        {
+          error: { code: 'LAST_CONTACT', message: '至少保留一个已验证的联系方式。' }
+        },
+        409
+      )
+    )
+    await expect(
+      account.dexAccountAction('unlink-contact', {
+        target: 'email',
+        currentPassword: 'password'
+      })
+    ).rejects.toThrow('至少保留')
+    expect(await readFile(vaultFile())).toEqual(original)
+  })
+
+  it.each([{ ok: true }, { ok: true, user: { ...user, id: 'different-account' } }])(
+    'does not replace the cached account with an invalid unlink response: %#',
+    async (result) => {
+      await login()
+      const original = await readFile(vaultFile())
+      mocks.fetch.mockResolvedValueOnce(response(result))
+      await expect(
+        account.dexAccountAction('unlink-provider', {
+          target: 'github',
+          currentPassword: 'password'
+        })
+      ).rejects.toThrow('无效的账号资料')
+      expect(await readFile(vaultFile())).toEqual(original)
+    }
+  )
+
+  it('does not recreate the vault when unlinking completes after logout', async () => {
+    await login()
+    let finish!: (value: Response) => void
+    let started!: () => void
+    const ready = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve
+          started()
+        })
+    )
+    const pending = account.dexAccountAction('unlink-provider', {
+      target: 'google',
+      currentPassword: 'password'
+    })
+    await ready
+    await account.logoutDexAccount()
+    finish(response({ ok: true, user: updatedUser }))
+    await expect(pending).rejects.toThrow('登录状态已更改')
+    await assertNoVault()
+  })
+
+  it.each(['old-user', 'unauthorized', 'offline'] as const)(
+    'does not restore stale bindings or sign out when a pre-unlink /me finishes with %s',
+    async (completion) => {
+      await login()
+      let finish!: (value: Response) => void
+      let fail!: (error: Error) => void
+      let started!: () => void
+      const ready = new Promise<void>((resolve) => {
+        started = resolve
+      })
+      mocks.fetch.mockImplementationOnce(
+        () =>
+          new Promise<Response>((resolve, reject) => {
+            finish = resolve
+            fail = reject
+            started()
+          })
+      )
+      const refresh = account.getDexAccount()
+      await ready
+      mocks.fetch.mockResolvedValueOnce(response({ ok: true, user: updatedUser }))
+      await account.dexAccountAction('unlink-contact', {
+        target: 'email',
+        currentPassword: 'password'
+      })
+      if (completion === 'old-user')
+        finish(response({ user: { ...user, email: 'old@example.com' } }))
+      else if (completion === 'unauthorized') finish(response({ error: 'Old response' }, 401))
+      else fail(new TypeError('Earlier request lost connection'))
+      expect(await refresh).toEqual({ status: 'online', serverUrl: origin, user: updatedUser })
+      expect(JSON.parse(mocks.decrypt(await readFile(vaultFile())))).toEqual({
+        serverUrl: origin,
+        accessToken,
+        user: updatedUser
+      })
+      mocks.fetch.mockRejectedValueOnce(new TypeError('Offline'))
+      expect(await account.getDexAccount()).toEqual({
+        status: 'offline',
+        serverUrl: origin,
+        user: updatedUser
+      })
+    }
+  )
 })
 
 describe('native OAuth bridge', () => {

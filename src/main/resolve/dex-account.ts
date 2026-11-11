@@ -21,6 +21,7 @@ const oauthAttempts = new Map<
   { serverUrl: string; expires: number; revision: number; intent: 'login' | 'link' }
 >()
 let accountRevision = 0
+let userRevision = 0
 const defaultServer = 'https://navio.mydex.top'
 const vaultPath = (): string => join(dataDir(), 'dex-account.vault')
 const settingsPath = (): string => join(dataDir(), 'dex-account-server.json')
@@ -59,11 +60,21 @@ async function readVault(): Promise<AccountVault | undefined> {
     return undefined
   }
 }
-async function storeVault(value: AccountVault, revision: number): Promise<boolean> {
+async function storeVault(
+  value: AccountVault,
+  revision: number,
+  expectedUserRevision?: number
+): Promise<boolean> {
   if (!safeStorage.isEncryptionAvailable())
     throw new Error('Windows 安全凭据存储不可用，未保存登录凭据。')
   return queue.run(async () => {
-    if (revision !== accountRevision || value.serverUrl !== (await dexServerUrl())) return false
+    const serverUrl = await dexServerUrl()
+    if (
+      revision !== accountRevision ||
+      value.serverUrl !== serverUrl ||
+      (expectedUserRevision !== undefined && expectedUserRevision !== userRevision)
+    )
+      return false
     await atomicWriteFile(vaultPath(), safeStorage.encryptString(JSON.stringify(value)))
     return true
   })
@@ -114,25 +125,40 @@ export async function getDexAccount(): Promise<{
   serverUrl: string
 }> {
   const revision = accountRevision
+  const refreshUserRevision = userRevision
   const serverUrl = await dexServerUrl()
   const vault = await readVault()
   if (!vault) return { status: 'signed-out', serverUrl }
+  // A completed mutation is newer than any /me request already in flight. Read
+  // behind queued writes so an older response cannot restore removed bindings.
+  const latestAccount = async (): Promise<Awaited<ReturnType<typeof getDexAccount>>> => {
+    const latest = await queue.run(readVault)
+    if (revision !== accountRevision || !latest)
+      return { status: 'signed-out', serverUrl: await dexServerUrl() }
+    return { status: 'online', user: latest.user, serverUrl: latest.serverUrl }
+  }
   try {
     const data = (await dexAccountRequest('/api/v1/me')) as { user?: DexUser }
     if (revision !== accountRevision)
       return { status: 'signed-out', serverUrl: await dexServerUrl() }
+    if (refreshUserRevision !== userRevision) return latestAccount()
     const user = data.user
     if (!user?.id) return { status: 'offline', user: vault.user, serverUrl }
-    if (!(await storeVault({ ...vault, user }, revision)))
+    if (!(await storeVault({ ...vault, user }, revision, refreshUserRevision))) {
+      if (refreshUserRevision !== userRevision) return latestAccount()
       return { status: 'signed-out', serverUrl: await dexServerUrl() }
+    }
     return { status: 'online', user, serverUrl }
   } catch (error) {
     if (revision !== accountRevision)
       return { status: 'signed-out', serverUrl: await dexServerUrl() }
+    if (refreshUserRevision !== userRevision) return latestAccount()
     if ([401, 403].includes((error as { status?: number }).status || 0)) {
       await queue.run(async () => {
-        if (revision === accountRevision) await unlink(vaultPath()).catch(() => {})
+        if (revision === accountRevision && refreshUserRevision === userRevision)
+          await unlink(vaultPath()).catch(() => {})
       })
+      if (refreshUserRevision !== userRevision) return latestAccount()
       return { status: 'signed-out', serverUrl }
     }
     return { status: 'offline', user: vault.user, serverUrl }
@@ -287,7 +313,11 @@ export async function dexAccountAction(
     status: ['/status', 'GET', false],
     login: ['/desktop/auth/login', 'POST', false],
     register: ['/desktop/auth/register', 'POST', false],
-    'otp-request': ['/desktop/auth/otp/request', 'POST', payload.purpose === 'bind'],
+    'otp-request': [
+      '/desktop/auth/otp/request',
+      'POST',
+      payload.purpose === 'bind' || payload.purpose === 'security'
+    ],
     'otp-login': ['/desktop/auth/otp/login', 'POST', false],
     'password-reset': ['/desktop/auth/password/reset', 'POST', false],
     profile: ['/account/profile', 'PATCH', true],
@@ -315,13 +345,44 @@ export async function dexAccountAction(
       true
     ]
   }
-  if (['revoke-device', 'unlink-provider', 'revoke-grant'].includes(action)) {
+  const unlinking = action === 'unlink-contact' || action === 'unlink-provider'
+  let securityProof: Record<string, string> | undefined
+  if (unlinking) {
+    const allowed = action === 'unlink-contact' ? ['email', 'phone'] : ['google', 'github']
+    if (typeof payload.target !== 'string' || !allowed.includes(payload.target))
+      throw new Error('账号操作目标无效。')
+    const password = payload.currentPassword
+    const contact = payload.contact
+    const code = payload.code
+    if (
+      typeof password === 'string' &&
+      password.length > 0 &&
+      password.length <= 128 &&
+      contact === undefined &&
+      code === undefined
+    ) {
+      securityProof = { currentPassword: password }
+    } else if (
+      password === undefined &&
+      typeof contact === 'string' &&
+      contact.trim().length > 0 &&
+      contact.length <= 320 &&
+      typeof code === 'string' &&
+      /^\d{6}$/.test(code)
+    ) {
+      securityProof = { contact: contact.trim(), code }
+    } else {
+      throw new Error('请使用当前密码或已绑定联系方式的验证码完成验证。')
+    }
+    const kind = action === 'unlink-contact' ? 'contacts' : 'providers'
+    route = [`/account/${kind}/${payload.target}`, 'DELETE', true]
+  }
+  if (['revoke-device', 'revoke-grant'].includes(action)) {
     const target = payload.target
     if (typeof target !== 'string' || !/^[\w.-]{1,128}$/.test(target))
       throw new Error('账号操作目标无效。')
     const kind = {
       'revoke-device': 'devices',
-      'unlink-provider': 'providers',
       'revoke-grant': 'grants'
     }[action]
     route = [`/account/${kind}/${encodeURIComponent(target)}`, 'DELETE', true]
@@ -331,6 +392,8 @@ export async function dexAccountAction(
   const serverUrl = await dexServerUrl()
   const signingIn = ['login', 'register', 'otp-login'].includes(action)
   const revision = signingIn ? ++accountRevision : accountRevision
+  const mutationVault = unlinking ? await readVault() : undefined
+  if (unlinking && !mutationVault) throw new Error('请先登录 D.E.X 账号。')
   if (signingIn) attempts.clear()
   if (signingIn) oauthAttempts.clear()
   const data = await dexAccountRequest(
@@ -338,12 +401,25 @@ export async function dexAccountAction(
     {
       method,
       headers: { 'x-dex-client': 'desktop' },
-      ...(method !== 'GET' && method !== 'DELETE'
-        ? { body: JSON.stringify({ ...payload, deviceName: 'Navio · Windows' }) }
-        : {})
+      ...(securityProof
+        ? { body: JSON.stringify(securityProof) }
+        : method !== 'GET' && method !== 'DELETE'
+          ? { body: JSON.stringify({ ...payload, deviceName: 'Navio · Windows' }) }
+          : {})
     },
     authenticated
   )
+  if (unlinking && mutationVault) {
+    const result = data as { ok?: boolean; user?: DexUser }
+    if (result.ok !== true || result.user?.id !== mutationVault.user.id)
+      throw new Error('账号服务返回了无效的账号资料，请刷新状态。')
+    if (revision !== accountRevision || serverUrl !== (await dexServerUrl()))
+      throw new Error('登录状态已更改，请刷新账号状态。')
+    userRevision++
+    if (!(await storeVault({ ...mutationVault, user: result.user }, revision)))
+      throw new Error('登录状态已更改，请刷新账号状态。')
+    return { ok: true, user: result.user }
+  }
   if (!signingIn) return data
   const result = data as { accessToken?: string; user?: DexUser }
   if (typeof result.accessToken !== 'string' || !result.accessToken || !result.user?.id)
