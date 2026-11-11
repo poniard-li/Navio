@@ -19,6 +19,7 @@ import { DEFAULT_MIHOMO_PORTS } from '../../shared/appConfig'
 import { pacPort, startPacServer, stopPacServer } from '../resolve/server'
 import { proxyLogger } from '../utils/logger'
 import { dataDir, resourcesFilesDir } from '../utils/dirs'
+import { setAppliedSystemProxy } from '../core/runtime-state'
 import { ProxyOwnership } from './proxyOwnership'
 import {
   readWindowsProxyState,
@@ -123,7 +124,13 @@ export async function triggerSysProxy(
     // Restoring local OS settings does not depend on an internet connection.
     if (!enable || net.isOnline() || options.force) {
       if (enable) {
-        await ownership.acquire(() => enableSysProxy(options.helperTimeout))
+        try {
+          await ownership.acquire(() => enableSysProxy(options.helperTimeout))
+          setAppliedSystemProxy(true)
+        } catch (error) {
+          setAppliedSystemProxy(null)
+          throw error
+        }
       } else {
         await disableSysProxy(options.helperTimeout)
       }
@@ -193,7 +200,13 @@ async function enableSysProxy(helperTimeout?: number): Promise<void> {
 }
 
 async function disableSysProxy(_helperTimeout?: number): Promise<void> {
-  ownership.release()
+  try {
+    ownership.release()
+    setAppliedSystemProxy(false)
+  } catch (error) {
+    setAppliedSystemProxy(null)
+    throw error
+  }
   await stopPacServer()
 }
 
@@ -204,7 +217,9 @@ export function disableSysProxySync(): void {
   triggerSysProxyTimer = null
   try {
     ownership.release()
+    setAppliedSystemProxy(false)
   } catch (error) {
+    setAppliedSystemProxy(null)
     shuttingDown = false
     throw error
   }

@@ -4,13 +4,14 @@ import WebSocket from 'ws'
 import { app } from 'electron'
 import { getAppConfig, getControledMihomoConfig, manageSmartOverride } from '../config'
 import { mainWindow } from '../window'
-import { tray } from '../resolve/tray'
-import { calcTraffic } from '../utils/calc'
+import { updateTrayTraffic } from '../resolve/tray'
+import { calculateTrayIconStatus } from '../resolve/tray-state'
 import { floatingWindow } from '../resolve/floatingWindow'
 import { recordTrafficUsage } from '../traffic/recorder'
 import { createLogger } from '../utils/logger'
 import { mihomoWorkConfigPath } from '../utils/dirs'
 import { bypassRules, usesGlobalBypass } from '../../shared/dex-bypass'
+import { getCoreRuntimeState, setAppliedTunState } from './runtime-state'
 import { generateProfile, getRuntimeConfig } from './factory'
 import { syncControlDnsAfterApply } from './dnsOverrideGuard'
 import { getMihomoIpcPath, hasCoreProcess, restartCore } from './manager'
@@ -227,6 +228,7 @@ export const patchMihomoConfig = async (patch: Partial<IMihomoConfig>): Promise<
   const patchConfig = async (): Promise<void> => {
     const instance = await getAxios()
     await instance.patch('/configs', effectivePatch)
+    if (effectivePatch.tun || effectivePatch.mode) void refreshMihomoTrayState()
   }
 
   // Configuration patches can also be the first recovery action after startup
@@ -482,6 +484,7 @@ export const mihomoHotReloadConfig = async (): Promise<void> => {
     return
   }
   mihomoApiLogger.info('hot reload config completed')
+  void refreshMihomoTrayState()
   try {
     await syncControlDnsAfterApply(dnsGuard)
   } catch (error) {
@@ -540,14 +543,7 @@ const mihomoTraffic = async (): Promise<void> => {
       // 抛出并变成未捕获的 Promise rejection（其余三条流都已在 try 内解析）。
       const json = JSON.parse(data) as IMihomoTrafficInfo
       mainWindow?.webContents.send('mihomoTraffic', json)
-      if (process.platform !== 'linux') {
-        tray?.setToolTip(
-          '↑' +
-            `${calcTraffic(json.up)}/s`.padStart(9) +
-            '\n↓' +
-            `${calcTraffic(json.down)}/s`.padStart(9)
-        )
-      }
+      updateTrayTraffic(json.up, json.down)
       floatingWindow?.webContents.send('mihomoTraffic', json)
     } catch {
       // ignore
@@ -701,22 +697,31 @@ export const TunStatus = async (): Promise<boolean> => {
   return config?.tun?.enable === true
 }
 
-export function calculateTrayIconStatus(
-  sysProxyEnabled: boolean,
-  tunEnabled: boolean
-): 'white' | 'blue' | 'green' | 'red' {
-  if (sysProxyEnabled && tunEnabled) {
-    return 'red' // 系统代理 + TUN 同时启用（警告状态）
-  } else if (sysProxyEnabled) {
-    return 'blue' // 仅系统代理启用
-  } else if (tunEnabled) {
-    return 'green' // 仅 TUN 启用
-  } else {
-    return 'white' // 全关
+export { calculateTrayIconStatus } from '../resolve/tray-state'
+
+let trayConfigRequest = 0
+
+export function reportMihomoTunStopped(generation: number): void {
+  if (generation !== getCoreRuntimeState().generation) return
+  ++trayConfigRequest
+  setAppliedTunState(false, generation)
+}
+
+export async function refreshMihomoTrayState(): Promise<void> {
+  const request = ++trayConfigRequest
+  const { generation, status } = getCoreRuntimeState()
+  if (status !== 'running') return
+  try {
+    const instance = await getAxios()
+    const config = await instance.get<never, IMihomoConfig>('/configs')
+    if (request !== trayConfigRequest) return
+    setAppliedTunState(config.tun?.enable === true, generation)
+  } catch {
+    // Failure to read the controller is not proof that the core process exited.
   }
 }
 
 export async function getTrayIconStatus(): Promise<'white' | 'blue' | 'green' | 'red'> {
-  const [sysProxyEnabled, tunEnabled] = await Promise.all([SysProxyStatus(), TunStatus()])
-  return calculateTrayIconStatus(sysProxyEnabled, tunEnabled)
+  const runtime = getCoreRuntimeState()
+  return calculateTrayIconStatus(runtime.sysProxy, runtime.tun, runtime.status)
 }

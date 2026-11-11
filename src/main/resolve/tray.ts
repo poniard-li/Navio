@@ -15,14 +15,14 @@ import {
 } from '../config'
 import { DEFAULT_MIHOMO_PORTS } from '../../shared/appConfig'
 import { usesGlobalBypass } from '../../shared/dex-bypass'
-import icoIcon from '../../../resources/icon.ico?asset'
-import icoIconBlue from '../../../resources/icon_blue.ico?asset'
-import icoIconRed from '../../../resources/icon_red.ico?asset'
-import icoIconGreen from '../../../resources/icon_green.ico?asset'
-import pngIcon from '../../../resources/icon.png?asset'
-import pngIconBlue from '../../../resources/icon_blue.png?asset'
-import pngIconRed from '../../../resources/icon_red.png?asset'
-import pngIconGreen from '../../../resources/icon_green.png?asset'
+import icoIcon from '../../../resources/tray_off.ico?asset'
+import icoIconBlue from '../../../resources/tray_tun.ico?asset'
+import icoIconRed from '../../../resources/tray_error.ico?asset'
+import icoIconGreen from '../../../resources/tray_proxy.ico?asset'
+import pngIcon from '../../../resources/tray_off.png?asset'
+import pngIconBlue from '../../../resources/tray_tun.png?asset'
+import pngIconRed from '../../../resources/tray_error.png?asset'
+import pngIconGreen from '../../../resources/tray_proxy.png?asset'
 import templateIcon from '../../../resources/iconTemplate.png?asset'
 import {
   mihomoChangeProxy,
@@ -30,9 +30,11 @@ import {
   mihomoGroupDelay,
   mihomoGroups,
   patchMihomoConfig,
-  getTrayIconStatus,
-  calculateTrayIconStatus
+  getTrayIconStatus
 } from '../core/mihomoApi'
+import { getCoreRuntimeState, subscribeCoreRuntimeState } from '../core/runtime-state'
+import { subscribeAppConfig } from '../config/app'
+import { calcTraffic } from '../utils/calc'
 import { mainWindow, showMainWindow, triggerMainWindow } from '../window'
 import { dataDir, logDir, mihomoCoreDir, mihomoWorkDir } from '../utils/dirs'
 import { triggerSysProxy } from '../sys/sysproxy'
@@ -44,6 +46,12 @@ import {
 } from '../core/manager'
 import { trayLogger } from '../utils/logger'
 import { writeClipboardText } from '../utils/clipboard'
+import {
+  buildTrayTooltip,
+  calculateTrayIconStatus,
+  getCustomTrayIconKey,
+  type TrayIconStatus
+} from './tray-state'
 import { floatingWindow, triggerFloatingWindow } from './floatingWindow'
 import { launchProxyTerminal, runNavioTrayScript } from './navio-tools'
 
@@ -51,11 +59,14 @@ export let tray: Tray | null = null
 let trayMenu: Menu | null = null
 // macOS 流量显示状态，避免异步读取配置导致的时序问题
 let macTrafficIconEnabled = false
-type TrayIconStatus = 'white' | 'blue' | 'green' | 'red'
 type TrayImage = Electron.NativeImage | string
-type CustomTrayIconKey = keyof ICustomTrayIcons
 const customTrayIconSize = 16
 const customTrayIconScaleFactors = [1, 1.25, 1.5, 2, 2.5, 3]
+let trayUpdateRevision = 0
+let trayTooltipLines = [PRODUCT_NAME]
+let trayTrafficText: string | undefined
+let unsubscribeRuntime: (() => void) | undefined
+let unsubscribeConfig: (() => void) | undefined
 
 export const buildContextMenu = async (): Promise<Menu> => {
   // 添加调试日志
@@ -451,7 +462,13 @@ export async function createTray(): Promise<void> {
   if (process.platform === 'win32') {
     tray = new Tray(icoIcon)
   }
-  await updateTrayToolTip()
+  unsubscribeRuntime?.()
+  unsubscribeConfig?.()
+  unsubscribeRuntime = subscribeCoreRuntimeState(() => {
+    if (getCoreRuntimeState().status !== 'running') trayTrafficText = undefined
+    void updateTrayIcon()
+  })
+  unsubscribeConfig = subscribeAppConfig(() => void updateTrayIcon())
   tray?.setIgnoreDoubleClickEvents(true)
 
   await updateTrayIcon()
@@ -464,19 +481,22 @@ export async function createTray(): Promise<void> {
     ipcMain.removeAllListeners('trayIconUpdate')
     ipcMain.on('trayIconUpdate', async (_, png: string, enabled: boolean, colored = false) => {
       macTrafficIconEnabled = enabled
-      const appConfig = await getAppConfig()
-      const status = await getTrayIconStatus()
+      const revision = ++trayUpdateRevision
+      const [appConfig, config] = await Promise.all([getAppConfig(), getControledMihomoConfig()])
+      if (!tray || revision !== trayUpdateRevision) return
+      const runtime = getCoreRuntimeState()
+      const status = calculateTrayIconStatus(runtime.sysProxy, runtime.tun, runtime.status)
       const customIcon = createCustomTrayImageForStatus(appConfig, status)
       if (customIcon) {
         tray?.setImage(customIcon)
-        await updateTrayToolTip(undefined, undefined, true)
+        updateTrayToolTip(appConfig, config, true)
         return
       }
       const image = nativeImage.createFromDataURL(png).resize({ height: 16 })
       // 带状态色的图不能当 template image，否则 macOS 只取 alpha 通道，颜色会被丢掉（#1143）
       image.setTemplateImage(!colored)
       tray?.setImage(image)
-      await updateTrayToolTip(undefined, undefined, false)
+      updateTrayToolTip(appConfig, config, false)
     })
     // macOS 默认行为：左键显示窗口，右键显示菜单
     tray?.addListener('click', async () => {
@@ -576,6 +596,13 @@ export async function showTrayIcon(): Promise<void> {
 }
 
 export async function closeTrayIcon(): Promise<void> {
+  ++trayUpdateRevision
+  unsubscribeRuntime?.()
+  unsubscribeConfig?.()
+  unsubscribeRuntime = undefined
+  unsubscribeConfig = undefined
+  trayTooltipLines = [PRODUCT_NAME]
+  trayTrafficText = undefined
   if (tray) {
     tray.destroy()
   }
@@ -770,24 +797,6 @@ function createCustomTrayImage(customTrayIcon: string): TrayImage | null {
   return createMultiScaleTrayImage(icon)
 }
 
-function hasCustomTrayIcons(customTrayIcons?: ICustomTrayIcons): boolean {
-  return Boolean(customTrayIcons && Object.values(customTrayIcons).some(Boolean))
-}
-
-function getCustomTrayIconKey(status: TrayIconStatus): CustomTrayIconKey {
-  switch (status) {
-    case 'blue':
-      return 'sysProxy'
-    case 'green':
-      return 'tun'
-    case 'red':
-      return 'tun'
-    case 'white':
-    default:
-      return 'off'
-  }
-}
-
 function getCustomTrayIconForStatus(
   appConfig: IAppConfig,
   status: TrayIconStatus
@@ -795,11 +804,7 @@ function getCustomTrayIconForStatus(
   const { customTrayIcon = '', customTrayIcons = {} } = appConfig
   const iconKey = getCustomTrayIconKey(status)
 
-  if (customTrayIcons[iconKey]) return customTrayIcons[iconKey]
-
-  if (status === 'red') {
-    return customTrayIcons.sysProxy || customTrayIcon
-  }
+  if (iconKey && customTrayIcons[iconKey]) return customTrayIcons[iconKey]
 
   return customTrayIcon
 }
@@ -811,20 +816,14 @@ function createCustomTrayImageForStatus(
   return createCustomTrayImage(getCustomTrayIconForStatus(appConfig, status) || '')
 }
 
-async function updateTrayToolTip(
-  sysProxyEnabled?: boolean,
-  tunEnabled?: boolean,
-  customIconEnabled?: boolean
-): Promise<void> {
+function updateTrayToolTip(
+  appConfig: IAppConfig,
+  config: Partial<IMihomoConfig>,
+  customIconEnabled: boolean
+): void {
   if (!tray) return
-
-  const [{ mode, tun }, appConfig] = await Promise.all([getControledMihomoConfig(), getAppConfig()])
-  const sysProxy = sysProxyEnabled ?? appConfig.sysProxy.enable
-  const tunStatus = tunEnabled ?? tun?.enable === true
-  const isCustomIcon =
-    customIconEnabled ??
-    Boolean(appConfig.customTrayIcon || hasCustomTrayIcons(appConfig.customTrayIcons))
-
+  const { mode } = config
+  const runtime = getCoreRuntimeState()
   const modeLabel =
     mode === 'global'
       ? usesGlobalBypass(mode, appConfig.dexBypass)
@@ -833,17 +832,22 @@ async function updateTrayToolTip(
       : mode === 'direct'
         ? t('tray.directMode')
         : t('tray.ruleMode')
-  const status = [
+  trayTooltipLines = [
+    PRODUCT_NAME,
     `${t('tray.tooltip.mode')}: ${modeLabel}`,
-    `${t('tray.systemProxy')}: ${sysProxy ? t('tray.tooltip.enabled') : t('tray.tooltip.disabled')}`,
-    `${t('tray.tun')}: ${tunStatus ? t('tray.tooltip.enabled') : t('tray.tooltip.disabled')}`
+    `${t('tray.systemProxy')}: ${runtime.sysProxy === null ? t('tray.tooltip.unknown') : runtime.sysProxy ? t('tray.tooltip.enabled') : t('tray.tooltip.disabled')}`,
+    `${t('tray.tun')}: ${runtime.tun ? t('tray.tooltip.enabled') : t('tray.tooltip.disabled')}`,
+    `${t('tray.tooltip.core')}: ${t(`tray.tooltip.core.${runtime.status}`)}`,
+    ...(customIconEnabled ? [t('tray.tooltip.customIcon')] : [])
   ]
+  tray.setToolTip(buildTrayTooltip(trayTooltipLines, trayTrafficText))
+}
 
-  if (isCustomIcon) {
-    status.push(t('tray.tooltip.customIcon'))
-  }
-
-  tray.setToolTip([PRODUCT_NAME, ...status].join('\n'))
+export function updateTrayTraffic(up: number, down: number): void {
+  if (!Number.isFinite(up) || !Number.isFinite(down) || up < 0 || down < 0) return
+  if (getCoreRuntimeState().status !== 'running') return
+  trayTrafficText = `↑ ${calcTraffic(up)}/s  ↓ ${calcTraffic(down)}/s`
+  tray?.setToolTip(buildTrayTooltip(trayTooltipLines, trayTrafficText))
 }
 
 function setTrayImage(iconPath: string): void {
@@ -859,60 +863,27 @@ function setTrayImage(iconPath: string): void {
   }
 }
 
-export function updateTrayIconImmediate(sysProxyEnabled: boolean, tunEnabled: boolean): void {
-  if (!tray) return
-
-  const status = calculateTrayIconStatus(sysProxyEnabled, tunEnabled)
-  const iconPaths = getIconPaths()
-
-  getAppConfig().then(async (appConfig) => {
-    if (!tray) return
-    try {
-      const { disableTrayIconColor = false } = appConfig
-      const customIcon = createCustomTrayImageForStatus(appConfig, status)
-      if (customIcon) {
-        tray.setImage(customIcon)
-        await updateTrayToolTip(sysProxyEnabled, tunEnabled, true)
-        return
-      }
-      // macOS 流量显示开启时，由 trayIconUpdate 负责图标更新
-      if (process.platform === 'darwin' && macTrafficIconEnabled) {
-        await updateTrayToolTip(sysProxyEnabled, tunEnabled, false)
-        return
-      }
-      const iconPath = disableTrayIconColor ? iconPaths.white : iconPaths[status]
-      setTrayImage(iconPath)
-      await updateTrayToolTip(sysProxyEnabled, tunEnabled, false)
-    } catch {
-      // Failed to update tray icon
-    }
-  })
+export function updateTrayIconImmediate(_sysProxyEnabled: boolean, _tunEnabled: boolean): void {
+  // Renderer switches can still be awaiting permission or an OS write.
+  void updateTrayIcon()
 }
 
 export async function updateTrayIcon(): Promise<void> {
   if (!tray) return
-
-  const appConfig = await getAppConfig()
-  const { disableTrayIconColor = false } = appConfig
-  const status = await getTrayIconStatus()
-  const iconPaths = getIconPaths()
-
+  const revision = ++trayUpdateRevision
   try {
+    const [appConfig, config] = await Promise.all([getAppConfig(), getControledMihomoConfig()])
+    if (!tray || revision !== trayUpdateRevision) return
+    const runtime = getCoreRuntimeState()
+    const status = calculateTrayIconStatus(runtime.sysProxy, runtime.tun, runtime.status)
     const customIcon = createCustomTrayImageForStatus(appConfig, status)
-    if (customIcon) {
-      tray.setImage(customIcon)
-      await updateTrayToolTip(undefined, undefined, true)
-      return
+    if (customIcon) tray.setImage(customIcon)
+    else if (process.platform !== 'darwin' || !macTrafficIconEnabled) {
+      const iconPaths = getIconPaths()
+      setTrayImage(appConfig.disableTrayIconColor ? iconPaths.white : iconPaths[status])
     }
-    // macOS 流量显示开启时，由 trayIconUpdate 负责图标更新
-    if (process.platform === 'darwin' && macTrafficIconEnabled) {
-      await updateTrayToolTip(undefined, undefined, false)
-      return
-    }
-    const iconPath = disableTrayIconColor ? iconPaths.white : iconPaths[status]
-    setTrayImage(iconPath)
-    await updateTrayToolTip(undefined, undefined, false)
+    updateTrayToolTip(appConfig, config, Boolean(customIcon))
   } catch {
-    // Failed to update tray icon
+    // A closing window or unreadable config must not interrupt proxy operations.
   }
 }

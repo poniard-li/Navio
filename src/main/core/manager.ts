@@ -44,8 +44,16 @@ import {
   stopMihomoMemory,
   patchMihomoConfig,
   mihomoHotReloadConfig,
+  refreshMihomoTrayState,
+  reportMihomoTunStopped,
   getAxios
 } from './mihomoApi'
+import {
+  beginCoreRuntimeStart,
+  getCoreRuntimeState,
+  setCoreRuntimeStatus,
+  stopCoreRuntimeState
+} from './runtime-state'
 import { generateProfile } from './factory'
 import { syncControlDnsAfterApply, type DnsOverrideGuardResult } from './dnsOverrideGuard'
 import { syncSmartModelToTestDir } from './smartModel'
@@ -488,7 +496,7 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     await checkProfile(current, core, diffWorkDir, ageSecretKey)
   }
   if (!skipStop && hasCoreProcess()) {
-    await stopCoreInternal()
+    await stopCoreInternal(false, true, true)
   }
   await cleanupSocketFile()
 
@@ -583,7 +591,8 @@ function setupCoreListeners(
   config: CoreConfig,
   hookWaiter: CoreHookWaiter | undefined,
   resolve: (value: Promise<void>[]) => void,
-  reject: (reason: unknown) => void
+  reject: (reason: unknown) => void,
+  runtimeGeneration: number
 ): void {
   const { logLevel, startupMode } = config
   let startupSettled = false
@@ -598,6 +607,10 @@ function setupCoreListeners(
     if (startupSettled) return
     startupSettled = true
     if (startupTimer) clearTimeout(startupTimer)
+    if (child === proc) {
+      setCoreRuntimeStatus('running', runtimeGeneration)
+      void refreshMihomoTrayState()
+    }
     resolve(value)
   }
 
@@ -606,6 +619,9 @@ function setupCoreListeners(
     startupSettled = true
     if (startupTimer) clearTimeout(startupTimer)
     if (child === proc) {
+      if (coreOperationPhase !== 'shutting-down') {
+        setCoreRuntimeStatus('error', runtimeGeneration)
+      }
       child = null
       proc.kill('SIGTERM')
       stopCoreProcessWatchdog(proc.pid)
@@ -640,6 +656,9 @@ function setupCoreListeners(
 
   proc.once('error', (error) => {
     managerLogger.error('Core process error', error)
+    if (child === proc && coreOperationPhase !== 'shutting-down') {
+      setCoreRuntimeStatus('error', runtimeGeneration)
+    }
     rejectStartup(new Error(`Failed to start core process: ${error.message}`))
   })
 
@@ -648,6 +667,9 @@ function setupCoreListeners(
     stopCoreProcessWatchdog(proc.pid)
 
     if (child === proc) {
+      if (coreOperationPhase !== 'shutting-down') {
+        setCoreRuntimeStatus('error', runtimeGeneration)
+      }
       child = null
     }
 
@@ -672,7 +694,7 @@ function setupCoreListeners(
         rejectStartup(error)
       }
     } else {
-      await runCoreOperation(() => stopCoreInternal())
+      await runCoreOperation(() => stopCoreInternal(false, true, true))
       rejectStartup(new Error(`Core exited before startup completed, code: ${code}`))
     }
   })
@@ -685,6 +707,7 @@ function setupCoreListeners(
     // TUN 权限错误
     if (str.includes('configure tun interface: operation not permitted')) {
       lastTunFailureAt = Date.now()
+      reportMihomoTunStopped(runtimeGeneration)
       patchControledMihomoConfig({ tun: { enable: false } })
       mainWindow?.webContents.send('controledMihomoConfigUpdated')
       ipcMain.emit('updateTrayMenu')
@@ -700,6 +723,7 @@ function setupCoreListeners(
       .find((line: string) => line.includes('Start TUN listening error'))
     if (tunListenErrorLine && Date.now() - lastTunFailureAt > tunFailureReportInterval) {
       lastTunFailureAt = Date.now()
+      reportMihomoTunStopped(runtimeGeneration)
       managerLogger.error('TUN listening error detected:', tunListenErrorLine.trim())
       try {
         await patchControledMihomoConfig({ tun: { enable: false } })
@@ -800,45 +824,56 @@ interface CoreStartAttempt {
 
 async function startCoreInternal(detached = false, skipStop = false): Promise<CoreStartAttempt> {
   ensureNotShuttingDown()
-  const config = await prepareCore(detached, skipStop)
-  ensureNotShuttingDown()
-  const hookWaiter = config.startupHook ? createCoreHookWaiter(config.startupHook) : undefined
-  const proc = spawnCoreProcess(config)
-  hookWaiter?.attachProcess(proc)
-  child = proc
-  startCoreProcessWatchdog(proc, detached)
+  let runtimeGeneration = beginCoreRuntimeStart()
+  try {
+    const config = await prepareCore(detached, skipStop)
+    ensureNotShuttingDown()
+    if (runtimeGeneration !== getCoreRuntimeState().generation) {
+      runtimeGeneration = beginCoreRuntimeStart()
+    }
+    const hookWaiter = config.startupHook ? createCoreHookWaiter(config.startupHook) : undefined
+    const proc = spawnCoreProcess(config)
+    hookWaiter?.attachProcess(proc)
+    child = proc
+    startCoreProcessWatchdog(proc, detached)
 
-  if (detached) {
-    managerLogger.info(
-      `Core process detached successfully on ${process.platform}, PID: ${proc.pid}`
+    if (detached) {
+      managerLogger.info(
+        `Core process detached successfully on ${process.platform}, PID: ${proc.pid}`
+      )
+      proc.unref()
+      return { readiness: Promise.resolve([new Promise(() => {})]) }
+    }
+
+    const readiness = new Promise<Promise<void>[]>((resolve, reject) => {
+      setupCoreListeners(proc, config, hookWaiter, resolve, reject, runtimeGeneration)
+    }).then(async (value) => {
+      // API 就绪后同步本次 DNS 保护结果。
+      try {
+        await syncControlDnsAfterApply(config.dnsGuard)
+      } catch (error) {
+        managerLogger.warn('Failed to sync DNS override state after core start', error)
+      }
+      return value
+    })
+    const activeCancel = cancelActiveStartup
+    readiness.then(
+      () => {
+        if (cancelActiveStartup === activeCancel) cancelActiveStartup = null
+      },
+      () => {
+        if (cancelActiveStartup === activeCancel) cancelActiveStartup = null
+      }
     )
-    proc.unref()
-    return { readiness: Promise.resolve([new Promise(() => {})]) }
-  }
 
-  const readiness = new Promise<Promise<void>[]>((resolve, reject) => {
-    setupCoreListeners(proc, config, hookWaiter, resolve, reject)
-  }).then(async (value) => {
-    // API 就绪后同步本次 DNS 保护结果。
-    try {
-      await syncControlDnsAfterApply(config.dnsGuard)
-    } catch (error) {
-      managerLogger.warn('Failed to sync DNS override state after core start', error)
+    return {
+      readiness
     }
-    return value
-  })
-  const activeCancel = cancelActiveStartup
-  readiness.then(
-    () => {
-      if (cancelActiveStartup === activeCancel) cancelActiveStartup = null
-    },
-    () => {
-      if (cancelActiveStartup === activeCancel) cancelActiveStartup = null
+  } catch (error) {
+    if (coreOperationPhase !== 'shutting-down') {
+      setCoreRuntimeStatus('error', runtimeGeneration)
     }
-  )
-
-  return {
-    readiness
+    throw error
   }
 }
 
@@ -867,7 +902,11 @@ export function startCoreForStartup(): Promise<Promise<void>[]> {
   return queueCoreStart()
 }
 
-async function stopCoreInternal(force = false, cancelStartup = true): Promise<void> {
+async function stopCoreInternal(
+  force = false,
+  cancelStartup = true,
+  preserveRuntimeState = false
+): Promise<void> {
   if (!force && process.platform === 'darwin') {
     try {
       await recoverDNS()
@@ -876,7 +915,7 @@ async function stopCoreInternal(force = false, cancelStartup = true): Promise<vo
     }
   }
 
-  const stoppedChild = stopCoreProcessAndStreams(cancelStartup)
+  const stoppedChild = stopCoreProcessAndStreams(cancelStartup, false, preserveRuntimeState)
 
   try {
     await ensureCoreProcessExited(stoppedChild)
@@ -892,8 +931,10 @@ async function stopCoreInternal(force = false, cancelStartup = true): Promise<vo
 
 function stopCoreProcessAndStreams(
   cancelStartup = true,
-  keepWatchdog = false
+  keepWatchdog = false,
+  preserveRuntimeState = false
 ): ChildProcess | null {
+  if (!preserveRuntimeState) stopCoreRuntimeState()
   if (cancelStartup) {
     cancelActiveStartup?.(new Error('Core startup was cancelled by a stop request'))
     cancelActiveStartup = null

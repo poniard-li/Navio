@@ -80,6 +80,45 @@ afterEach(() => {
 })
 
 describe('system proxy integration', () => {
+  it('publishes success only after the OS takeover has finished', async () => {
+    const { triggerSysProxy } = await import('./sysproxy')
+    const { getCoreRuntimeState } = await import('../core/runtime-state')
+    let finish!: () => void
+    mocks.startPac.mockReturnValueOnce(
+      new Promise<void>((resolve) => {
+        finish = resolve
+      })
+    )
+    const pending = triggerSysProxy(true)
+    await vi.waitFor(() => expect(mocks.startPac).toHaveBeenCalledOnce())
+    expect(getCoreRuntimeState().sysProxy).toBe(false)
+    finish()
+    await pending
+    expect(getCoreRuntimeState().sysProxy).toBe(true)
+    mocks.stopPac.mockRejectedValueOnce(new Error('PAC cleanup failed'))
+    await expect(triggerSysProxy(false)).rejects.toThrow('PAC cleanup failed')
+    expect(getCoreRuntimeState().sysProxy).toBe(false)
+  })
+
+  it('does not retain a successful status after a failed takeover and rollback', async () => {
+    const { triggerSysProxy } = await import('./sysproxy')
+    const { getCoreRuntimeState } = await import('../core/runtime-state')
+    await triggerSysProxy(true)
+    mocks.startPac.mockRejectedValueOnce(new Error('takeover failed'))
+    await expect(triggerSysProxy(true)).rejects.toThrow('takeover failed')
+    expect(getCoreRuntimeState().sysProxy).toBeNull()
+    await triggerSysProxy(false)
+    expect(getCoreRuntimeState().sysProxy).toBe(false)
+  })
+
+  it('publishes the final disabled state after a rapid on and off request', async () => {
+    const { triggerSysProxy } = await import('./sysproxy')
+    const { getCoreRuntimeState } = await import('../core/runtime-state')
+    await Promise.all([triggerSysProxy(true), triggerSysProxy(false)])
+    expect(getCoreRuntimeState().sysProxy).toBe(false)
+    expect(mocks.manual).not.toHaveBeenCalled()
+  })
+
   it('leaves another client untouched on initial disabled startup and exit', async () => {
     const { triggerSysProxy, restoreSysProxyForExit } = await import('./sysproxy')
     await triggerSysProxy(false)

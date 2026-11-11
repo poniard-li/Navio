@@ -48,7 +48,13 @@
   ${EndIf}
   !insertmacro NavioRunSafety "Preflight"
   ClearErrors
+  !ifdef COMPRESS
+    SetCompress off
+  !endif
   File /oname=$PLUGINSDIR\navio-payload.7z "${APP_64}"
+  !ifdef COMPRESS
+    SetCompress "${COMPRESS}"
+  !endif
   ${If} ${Errors}
     !insertmacro NavioInstallFailure "Unable to write the temporary application archive."
   ${EndIf}
