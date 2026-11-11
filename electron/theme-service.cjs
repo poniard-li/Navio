@@ -71,7 +71,7 @@ class ThemeService {
     this.local = [];
     this.remote = [];
     this.serverUrl = '';
-    this.selectedId = 'obsidian';
+    this.selectedId = 'glacier';
     this.remoteError = null;
     this.ready = this.initialize();
   }

@@ -5,8 +5,8 @@ const { BUILTIN_THEMES, validateTheme } = require('../shared/themes.cjs');
 
 function theme() { return structuredClone({ ...BUILTIN_THEMES[0], id: 'test-design' }); }
 
-test('all four built-in themes validate, are immutable, and use safe colors', () => {
-  assert.deepEqual(BUILTIN_THEMES.map(item => item.id), ['obsidian', 'porcelain', 'midnight', 'rose']);
+test('all six built-in themes validate, are immutable, and use safe colors', () => {
+  assert.deepEqual(BUILTIN_THEMES.map(item => item.id), ['glacier', 'graphite', 'obsidian', 'porcelain', 'midnight', 'rose']);
   for (const item of BUILTIN_THEMES) {
     assert.deepEqual(validateTheme(item), item);
     assert.ok(Object.isFrozen(item));

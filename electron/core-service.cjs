@@ -167,7 +167,7 @@ class CoreService {
     this.portCheck = options.portCheck || ensurePortAvailable;
     this.watchdogEnabled = options.watchdog !== false;
     this.proxyAdapter = options.proxyAdapter || new WindowsProxyAdapter(path.join(this.scriptsDir, 'proxy-state.ps1'), path.join(this.dataDir, 'proxy-recovery.json'));
-    this.state = { profiles: [], activeProfileId: null, settings: { theme: 'obsidian', startMinimized: false } };
+    this.state = { profiles: [], activeProfileId: null, settings: { theme: 'glacier', startMinimized: false } };
     this.secret = crypto.randomBytes(32).toString('hex');
     this.child = null;
     this.watchdog = null;
@@ -183,6 +183,11 @@ class CoreService {
     this.snapshotPromise = null;
     this.restoreProxyPromise = null;
     this.proxyCheckedAt = 0;
+    this.connectPromise = null;
+    this.disconnectPromise = null;
+    this.connectionAction = null;
+    this.rulesCache = null;
+    this.rulesGeneration = 0;
   }
 
   async init() {
@@ -312,6 +317,57 @@ class CoreService {
     try { return JSON.parse(text); } catch { throw new Error('Clash 控制接口返回无效数据。'); }
   }
   requireRunning() { if (!this.ready || !this.child) throw new Error('请先导入配置并启动内核。'); }
+  connectionStatus() {
+    const running = this.ready && !!this.child;
+    return { connected: running && this.systemProxy, running, systemProxy: this.systemProxy };
+  }
+  async connect() {
+    if (this.connectPromise) return this.connectPromise;
+    this.connectPromise = this._connect();
+    try { return await this.connectPromise; } finally { this.connectPromise = null; }
+  }
+  async _connect() {
+    if (this.disconnectPromise) await this.disconnectPromise;
+    if (this.disposed) throw new Error('应用正在退出。');
+    const startedHere = !this.child && !this.startPromise && !this.ready;
+    let applyingProxy = false;
+    let needsProxyRollback = false;
+    this.connectionAction = 'connecting';
+    try {
+      await this.start();
+      // A previous enabled flag may be stale after another app changes Windows settings.
+      if (this.systemProxy && this.proxyAdapter.read) {
+        this.systemProxy = (await this.proxyAdapter.read()).enabled === true;
+        this.proxyCheckedAt = Date.now();
+      }
+      applyingProxy = true;
+      needsProxyRollback = !this.systemProxy;
+      await this.setSystemProxy({ enabled: true });
+      this.lastError = null;
+      return this.connectionStatus();
+    } catch (error) {
+      let cleanupError;
+      try {
+        if (startedHere) await this.stop();
+        else if (applyingProxy && needsProxyRollback) await this.restoreProxy();
+      } catch (failure) { cleanupError = failure; }
+      const reported = cleanupError ? new Error(`${error.message} 系统代理恢复失败，请在设置中重试。`) : error;
+      this.failure(reported);
+      throw reported;
+    } finally { this.connectionAction = null; }
+  }
+  async disconnect() {
+    if (this.disconnectPromise) return this.disconnectPromise;
+    this.disconnectPromise = this._disconnect();
+    try { return await this.disconnectPromise; } finally { this.disconnectPromise = null; }
+  }
+  async _disconnect() {
+    if (this.connectPromise) await this.connectPromise.catch(() => {});
+    this.connectionAction = 'disconnecting';
+    try { await this.stop(); this.lastError = null; return this.connectionStatus(); }
+    catch (error) { this.failure(error); throw error; }
+    finally { this.connectionAction = null; }
+  }
   async start() {
     if (this.disposed) throw new Error('应用正在退出。');
     if (this.ready) return { running: true };
@@ -336,6 +392,8 @@ class CoreService {
     if (this.disposed) throw new Error('应用正在退出。');
     this.lastError = null;
     this.mode = config.mode;
+    this.rulesCache = null;
+    this.rulesGeneration++;
     const child = this.spawnProcess(executable, ['-d', path.join(this.dataDir, 'core'), '-f', configPath], { windowsHide: true, stdio: ['ignore', 'pipe', 'pipe'], cwd: this.coreDir });
     this.child = child;
     let startupError;
@@ -358,9 +416,11 @@ class CoreService {
     }
     try {
       for (let attempt = 0; attempt < 50; attempt++) {
+        if (this.disposed) throw new Error('应用正在退出。');
         if (startupError || this.child !== child || child.exitCode !== null && child.exitCode !== undefined) throw new Error('Clash 内核启动失败，请查看日志和配置兼容性。');
         try {
           const version = await this.api('/version', { timeout: 700 });
+          if (this.disposed || this.child !== child) throw new Error('内核启动已取消。');
           this.coreVersion = version.version || 'unknown'; this.ready = true;
           this.log('info', `内核已启动，监听 127.0.0.1:${PORT}。`);
           return { running: true };
@@ -377,7 +437,9 @@ class CoreService {
   }
   async _restoreProxy() {
     if (!this.systemProxy && !(await this.exists(path.join(this.dataDir, 'proxy-recovery.json')))) return;
-    const result = await this.proxyAdapter.restore(); this.systemProxy = false;
+    const result = await this.proxyAdapter.restore();
+    if (result?.restored === false && result.reason !== 'changed') throw new Error('系统代理恢复失败，请重试。');
+    this.systemProxy = false;
     if (result?.restored === false && result.reason === 'changed') this.log('warning', '系统代理已被其他程序更改，已保留新的设置。');
   }
   async stop() {
@@ -390,6 +452,8 @@ class CoreService {
     try { await this.restoreProxy(); } catch (error) { proxyError = error; this.failure(new Error('系统代理恢复失败，请在设置中重试关闭系统代理。')); }
     const child = this.child;
     this.ready = false; this.child = null;
+    this.rulesCache = null;
+    this.rulesGeneration++;
     if (child && child.exitCode === null) {
       await new Promise(resolve => {
         const timer = setTimeout(() => { try { child.kill('SIGKILL'); } catch {} resolve(); }, 2500);
@@ -417,7 +481,17 @@ class CoreService {
   async closeConnection({ id } = {}) { this.requireRunning(); if (typeof id !== 'string' || !/^[a-zA-Z0-9-]{1,100}$/.test(id)) throw new Error('连接 ID 无效。'); await this.api(`/connections/${encodeURIComponent(id)}`, { method: 'DELETE' }); return { closed: id }; }
   async setSystemProxy({ enabled } = {}) {
     if (typeof enabled !== 'boolean') throw new Error('系统代理开关参数无效。');
-    if (enabled) { this.requireRunning(); if (!this.systemProxy) await this.proxyAdapter.enable(); this.systemProxy = true; this.proxyCheckedAt = Date.now(); this.log('info', '系统代理已开启。'); }
+    if (enabled) {
+      if (this.disposed) throw new Error('应用正在退出。');
+      this.requireRunning();
+      if (!this.systemProxy) {
+        const result = await this.proxyAdapter.enable();
+        if (result?.enabled === false) throw new Error('系统代理未能开启，请重试。');
+      }
+      this.systemProxy = true;
+      if (this.disposed || !this.ready || !this.child) { await this.restoreProxy(); throw new Error('内核已停止，系统代理已恢复。'); }
+      this.proxyCheckedAt = Date.now(); this.log('info', '系统代理已开启。');
+    }
     else { await this.restoreProxy(); this.log('info', '系统代理已关闭并恢复原设置。'); }
     return { enabled: this.systemProxy };
   }
@@ -434,16 +508,28 @@ class CoreService {
       try { this.systemProxy = (await this.proxyAdapter.read()).enabled === true; } catch { controllerError = '无法确认当前系统代理状态。'; }
     }
     if (this.ready && this.child) {
-      const result = await Promise.allSettled([this.api('/proxies'), this.api('/connections'), this.api('/rules'), this.api('/configs')]);
-      if (result[0].status === 'fulfilled') proxies = result[0].value.proxies || {};
-      if (result[1].status === 'fulfilled') { connections = result[1].value.connections || []; totals = { upload: Number(result[1].value.uploadTotal) || 0, download: Number(result[1].value.downloadTotal) || 0 }; }
-      if (result[2].status === 'fulfilled') rules = result[2].value.rules || [];
-      if (result[3].status === 'fulfilled' && MODES.has(result[3].value.mode)) this.mode = result[3].value.mode;
-      if (result.some(item => item.status === 'rejected')) controllerError = '部分内核状态暂时无法读取。';
+      const child = this.child;
+      const generation = this.rulesGeneration;
+      const result = await Promise.allSettled([this.api('/proxies'), this.api('/connections'), this.rulesCache === null ? this.api('/rules') : Promise.resolve({ rules: this.rulesCache }), this.api('/configs')]);
+      if (this.ready && this.child === child && generation === this.rulesGeneration) {
+        if (result[0].status === 'fulfilled') proxies = result[0].value.proxies || {};
+        if (result[1].status === 'fulfilled') { connections = result[1].value.connections || []; totals = { upload: Number(result[1].value.uploadTotal) || 0, download: Number(result[1].value.downloadTotal) || 0 }; }
+        if (result[2].status === 'fulfilled') { rules = result[2].value.rules || []; this.rulesCache = rules; }
+        if (result[3].status === 'fulfilled' && MODES.has(result[3].value.mode)) this.mode = result[3].value.mode;
+        if (result.some(item => item.status === 'rejected')) controllerError = '部分内核状态暂时无法读取。';
+      }
     }
-    return { appVersion: this.version, core: { running: this.ready && !!this.child, available: await this.exists(path.join(this.coreDir, process.platform === 'win32' ? 'clash.exe' : 'clash')), version: this.coreVersion, port: PORT, controllerPort: CONTROLLER_PORT, error: controllerError || this.lastError }, mode: this.mode, systemProxy: this.systemProxy, profiles: this.state.profiles.map(profile => this.publicProfile(profile)), proxies, connections, totals, rules, logs: this.logs.slice(), settings: { ...this.state.settings }, lastError: this.lastError };
+    const status = this.connectionStatus();
+    return { appVersion: this.version, core: { running: status.running, available: await this.exists(path.join(this.coreDir, process.platform === 'win32' ? 'clash.exe' : 'clash')), version: this.coreVersion, port: PORT, controllerPort: CONTROLLER_PORT, error: controllerError || this.lastError }, connection: { state: this.connectionAction || (status.connected ? 'connected' : status.running ? 'core-only' : 'disconnected'), connected: status.connected }, mode: this.mode, systemProxy: this.systemProxy, profiles: this.state.profiles.map(profile => this.publicProfile(profile)), proxies, connections, totals, rules, logs: this.logs.slice(), settings: { ...this.state.settings }, lastError: this.lastError };
   }
-  async dispose() { this.disposed = true; await this.stop(); }
+  async dispose() {
+    this.disposed = true;
+    // A startup already awaiting I/O must settle before the final stop, otherwise
+    // it could create a new child after shutdown has completed.
+    if (this.connectPromise) await this.connectPromise.catch(() => {});
+    if (this.startPromise) await this.startPromise.catch(() => {});
+    await this.stop();
+  }
 }
 
 module.exports = { CoreService, WindowsProxyAdapter, parseProfile, normalizeConfig, fetchSubscription, requireHttps, PORT, CONTROLLER_PORT, MAX_PROFILE_BYTES };

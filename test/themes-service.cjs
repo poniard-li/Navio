@@ -34,7 +34,7 @@ test('desktop theme service persists edits, uses native dialogs, and publishes w
   try {
     const userData = path.join(directory, 'client');
     const service = new ThemeService({ userData, dialog });
-    assert.equal((await service.handle('themes.list')).builtins.length, 4);
+    assert.equal((await service.handle('themes.list')).builtins.length, 6);
     await service.handle('themes.save', { theme });
     await service.handle('themes.apply', { id: theme.id });
     await service.handle('themes.export', { id: theme.id });

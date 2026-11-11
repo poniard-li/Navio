@@ -1,7 +1,7 @@
 {
   "name": "dex-studio",
   "productName": "D.E.X STUDIO",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "D.E.X STUDIO desktop client with an independent Clash core adapter",
   "author": "D.E.X STUDIO",
   "private": true,

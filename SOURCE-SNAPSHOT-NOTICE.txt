@@ -1,8 +1,8 @@
 Navio historical source snapshot / Public Beta archive
 
-Public tag: v0.1.0-beta.1
-Original internal name/version: dex-studio 0.1.0
-Original source SHA256: 794d7a82e1eff00f21292ec5355ea60b270c50dc12c8f6b0ffd38386811038f9
+Public tag: v0.2.0-beta.1
+Original internal name/version: dex-studio 0.2.0
+Original source SHA256: 3e58a50a8c8ac53c793a9bfd232af1cbe1aa916c33f08ea086c0072156978fbc
 
 The original resources/core directory (clash.exe, its signature, and Country.mmdb) is excluded.
 The historical application code is unchanged. The original archive is retained locally unchanged.

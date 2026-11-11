@@ -53,6 +53,10 @@ function validateTheme(input) {
 }
 
 const definitions = [
+  { id: 'glacier', name: '冰川白', author: 'D.E.X STUDIO', description: '通透的白色与清晰的蓝，留出专注的空间。', appearance: 'light', radius: 20,
+    colors: { bg: '#f5f5f7', surface: '#ffffff', surfaceRaised: '#eceef2', border: '#dfe2e7', text: '#1d1d1f', muted: '#70757e', accent: '#007aff', accentText: '#ffffff', success: '#248a3d' } },
+  { id: 'graphite', name: '石墨黑', author: 'D.E.X STUDIO', description: '柔和的石墨灰，配以明亮而沉静的蓝。', appearance: 'dark', radius: 20,
+    colors: { bg: '#151618', surface: '#202124', surfaceRaised: '#2c2d31', border: '#393b40', text: '#f5f5f7', muted: '#a1a4ad', accent: '#5e9fff', accentText: '#0b1830', success: '#64d284' } },
   { id: 'obsidian', name: '曜石 · Obsidian', author: 'D.E.X STUDIO', description: '深曜黑与暖琥珀，安静而有力量。', appearance: 'dark', radius: 16,
     colors: { bg: '#0d0e10', surface: '#151619', surfaceRaised: '#1d1f23', border: '#2c2e33', text: '#f4f1ea', muted: '#92949d', accent: '#e9ad66', accentText: '#20170d', success: '#85caa6' } },
   { id: 'porcelain', name: '瓷白 · Porcelain', author: 'D.E.X STUDIO', description: '温润的瓷白，搭配明亮而克制的橙。', appearance: 'light', radius: 16,

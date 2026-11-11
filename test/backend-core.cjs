@@ -125,6 +125,101 @@ test('settings persist without launching any network service', async t => {
   assert.equal(calls.spawn, 0); assert.equal(calls.requests.length, 0);
 });
 
+test('one-click connect starts once, applies the proxy once and disconnect restores it', async t => {
+  const { service, calls } = await fixture(t);
+  await service.importText(validYaml, 'Connect');
+  assert.deepEqual((await service.snapshot()).connection, { state: 'disconnected', connected: false });
+  const results = await Promise.all([service.connect(), service.connect()]);
+  assert.deepEqual(results[0], { connected: true, running: true, systemProxy: true });
+  assert.deepEqual(results[1], results[0]);
+  assert.equal(calls.spawn, 1); assert.equal(calls.enable, 1);
+  assert.deepEqual((await service.snapshot()).connection, { state: 'connected', connected: true });
+  assert.deepEqual(await service.disconnect(), { connected: false, running: false, systemProxy: false });
+  assert.equal(calls.restore, 1);
+  assert.equal((await service.snapshot()).core.running, false);
+});
+
+test('failed connect rolls back only a core started by that connect', async t => {
+  const fresh = await fixture(t);
+  await fresh.service.importText(validYaml, 'Fresh');
+  fresh.service.proxyAdapter.enable = async () => { throw new Error('Cannot apply Windows proxy'); };
+  await assert.rejects(fresh.service.connect(), /Cannot apply Windows proxy/);
+  const failed = await fresh.service.snapshot();
+  assert.equal(failed.core.running, false); assert.equal(failed.systemProxy, false);
+  assert.match(failed.lastError, /Cannot apply Windows proxy/);
+  assert.equal(fresh.calls.spawn, 1);
+
+  const existing = await fixture(t);
+  await existing.service.importText(validYaml, 'Already running');
+  await existing.service.start();
+  const child = existing.service.child;
+  existing.service.proxyAdapter.enable = async () => ({ enabled: false });
+  await assert.rejects(existing.service.connect(), /未能开启/);
+  assert.equal(existing.service.child, child);
+  assert.equal(existing.calls.spawn, 1);
+  assert.deepEqual((await existing.service.snapshot()).connection, { state: 'core-only', connected: false });
+});
+
+test('disconnect surfaces failed proxy recovery without reporting success', async t => {
+  const { service } = await fixture(t);
+  await service.importText(validYaml, 'Recovery'); await service.connect();
+  service.proxyAdapter.restore = async () => ({ restored: false, reason: 'permission-denied' });
+  await assert.rejects(service.disconnect(), /恢复失败/);
+  const snapshot = await service.snapshot();
+  assert.equal(snapshot.core.running, false);
+  assert.equal(snapshot.systemProxy, true);
+  assert.equal(snapshot.connection.connected, false);
+  assert.match(snapshot.lastError, /恢复失败/);
+});
+
+test('rules load accurately once per running configuration and reload after switching', async t => {
+  const { service, calls } = await fixture(t);
+  const first = await service.importText(validYaml, 'First');
+  await service.importText(validYaml, 'Second');
+  await service.start();
+  assert.equal((await service.snapshot()).rules[0].type, 'Match');
+  await service.snapshot(); await service.snapshot();
+  assert.equal(calls.requests.filter(call => call.pathname === '/rules').length, 1);
+  assert.equal(calls.requests.filter(call => call.pathname === '/connections').length, 3);
+  await service.activateProfile({ id: first.id });
+  assert.equal((await service.snapshot()).rules[0].type, 'Match');
+  assert.equal(calls.requests.filter(call => call.pathname === '/rules').length, 2);
+  await service.stop();
+  assert.deepEqual((await service.snapshot()).rules, []);
+});
+
+test('a failed first rules read is retried instead of caching empty data', async t => {
+  const { service, calls } = await fixture(t);
+  await service.importText(validYaml, 'Rules retry'); await service.start();
+  const fetcher = service.fetcher;
+  let failOnce = true;
+  service.fetcher = async (url, request) => {
+    if (new URL(url).pathname === '/rules' && failOnce) { failOnce = false; throw new Error('Transient failure'); }
+    return fetcher(url, request);
+  };
+  assert.deepEqual((await service.snapshot()).rules, []);
+  assert.equal((await service.snapshot()).rules[0].type, 'Match');
+  await service.snapshot();
+  assert.equal(calls.requests.filter(call => call.pathname === '/rules').length, 1);
+});
+
+test('quitting during startup cannot leave a late core running or apply the proxy', async t => {
+  let releasePorts;
+  let signalPorts;
+  const portsEntered = new Promise(resolve => { signalPorts = resolve; });
+  const ports = new Promise(resolve => { releasePorts = resolve; });
+  const { service, calls } = await fixture(t, { portCheck: async () => { signalPorts(); await ports; } });
+  await service.importText(validYaml, 'Quit during connect');
+  const connecting = service.connect();
+  const rejected = assert.rejects(connecting, /正在退出/);
+  await portsEntered;
+  const disposing = service.dispose();
+  releasePorts();
+  await rejected; await disposing;
+  assert.equal(calls.spawn, 0); assert.equal(calls.enable, 0);
+  assert.equal((await service.snapshot()).core.running, false);
+});
+
 test('a conflicting port prevents process creation and a core crash restores the owned proxy', async t => {
   const blocked = await fixture(t, { portCheck: async () => { throw new Error('端口已占用'); } });
   await blocked.service.importText(validYaml, 'Blocked');
