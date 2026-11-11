@@ -136,7 +136,6 @@ export async function generateProfile(
   pendingControledMihomoConfig?: Partial<IMihomoConfig>,
   options: GenerateProfileOptions = {}
 ): Promise<GenerateProfileResult> {
-  
   // 第一阶段：并行读取互不依赖的配置（强制重读 profileConfig 完成后再进入第二阶段，保证缓存一致）。
   const [profileConfig, appConfig] = await Promise.all([getProfileConfig(true), getAppConfig()])
   const { current } = profileConfig

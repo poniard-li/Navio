@@ -55,14 +55,14 @@ export async function getControledMihomoConfig(force = false): Promise<Partial<I
   }
   if (typeof controledMihomoConfig !== 'object')
     controledMihomoConfig = cloneDefaultControledMihomoConfig()
-  
+
   return controledMihomoConfig
 }
 
 export async function patchControledMihomoConfig(patch: Partial<IMihomoConfig>): Promise<void> {
   await controledMihomoWriteQueue.run(async () => {
     const appConfig = await getAppConfig()
-    
+
     const {
       controlDns = DEFAULT_CONTROL_DNS,
       controlSniff = DEFAULT_CONTROL_SNIFF,

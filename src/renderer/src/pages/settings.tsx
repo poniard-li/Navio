@@ -112,7 +112,7 @@ const Settings: React.FC = () => {
         <Tab key="about" title="关于">
           <div className="m-3 rounded-xl border border-default-200 px-6 py-12 text-center">
             <h3 className="text-4xl tracking-tight font-semibold">{PRODUCT_NAME}</h3>
-            <p className="text-sm text-default-500 mt-4">{version}</p>
+            <p className="text-sm text-default-500 mt-4">{version} · Public Beta（公测版）</p>
             <p className="text-xs text-default-500 mt-3">Built by {DEVELOPER_NAME}</p>
             <Button variant="light" className="mt-7" onPress={() => navigate('/credits')}>
               鸣谢与开源许可 →

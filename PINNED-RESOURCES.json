@@ -1,6 +1,6 @@
 {
-  "product": "D.E.X STUDIO",
-  "version": "0.3.0-preview.1",
+  "product": "Navio",
+  "version": "0.6.0-beta.1",
   "upstreamClient": "Clash Party 2.0.4",
   "stableCore": "Mihomo v1.19.32",
   "sourceRuntimeAsarSha256": "801ad4a2dfd770ae4007879d8cf2d5e4f19dbfc92b02703b30b908f846e75abe",

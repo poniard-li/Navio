@@ -40,7 +40,7 @@ import {
 } from './lifecycle'
 import { configureAppPaths } from './utils/dirs'
 import { setTrafficUsageEnabled } from './traffic/recorder'
-import { prepareStartupConnection } from './resolve/startup-connection'
+import { prepareStartupConnection, restoreStartupProxy } from './resolve/startup-connection'
 
 const testMode = process.env.DEX_TEST_MODE === '1'
 
@@ -311,6 +311,7 @@ app
       try {
         initCoreWatcher()
         const startPromises = await startCoreForStartup()
+        await restoreStartupProxy()
         if (startPromises.length > 0 && !testMode) {
           startPromises[0].then(async () => {
             await Promise.allSettled([
@@ -328,7 +329,10 @@ app
         }
         coreStarted = true
       } catch (e) {
-        safeShowErrorBox('mihomo.error.coreStartFailed', `${e}`)
+        safeShowErrorBox(
+          'mihomo.error.coreStartFailed',
+          `${e}\n\n如提示 GeoIP / ASN 数据缺失或下载失败，请在“外部资源”中下载最新数据库后重试。系统代理不会因本次启动失败而启用。`
+        )
       } finally {
         // 安全检查通过后，即使自动启动失败，也允许用户手动重试。
         completeCoreInitialization(true)

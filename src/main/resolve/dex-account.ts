@@ -3,14 +3,12 @@ import { join } from 'path'
 import { safeStorage, shell } from 'electron'
 import { dataDir } from '../utils/dirs'
 import { atomicWriteFile, WriteQueue } from '../utils/safeFile'
-
-interface DexUser {
-  id: string
-  username: string
-  displayName?: string
-  email?: string
-  phone?: string
-}
+import type {
+  DexUser,
+  DexAccountAction,
+  DexOAuthRequest,
+  DexOAuthResult
+} from '../../shared/dex-account'
 interface AccountVault {
   serverUrl: string
   accessToken: string
@@ -18,8 +16,12 @@ interface AccountVault {
 }
 const queue = new WriteQueue()
 const attempts = new Map<string, { serverUrl: string; expires: number; revision: number }>()
+const oauthAttempts = new Map<
+  string,
+  { serverUrl: string; expires: number; revision: number; intent: 'login' | 'link' }
+>()
 let accountRevision = 0
-const defaultServer = 'https://account.mydex.top'
+const defaultServer = 'https://navio.mydex.top'
 const vaultPath = (): string => join(dataDir(), 'dex-account.vault')
 const settingsPath = (): string => join(dataDir(), 'dex-account-server.json')
 
@@ -254,6 +256,7 @@ export async function pollDexLogin(deviceCode: string): Promise<{
 export async function logoutDexAccount(): Promise<void> {
   accountRevision++
   attempts.clear()
+  oauthAttempts.clear()
   try {
     await dexAccountRequest('/api/v1/auth/logout', { method: 'POST', body: '{}' })
   } catch {
@@ -273,6 +276,236 @@ export async function setDexServerUrl(url: string): Promise<void> {
     await atomicWriteFile(settingsPath(), JSON.stringify({ serverUrl }))
   }
 }
-export async function openDexAccountPortal(): Promise<void> {
-  await shell.openExternal(`${await dexServerUrl()}/account/`)
+/** Fixed operation map: the renderer never chooses an HTTP endpoint or receives a session token. */
+export async function dexAccountAction(
+  action: DexAccountAction,
+  payload: Record<string, unknown> = {}
+): Promise<unknown> {
+  if (!payload || typeof payload !== 'object' || Array.isArray(payload))
+    throw new Error('账号请求格式无效。')
+  const routes: Record<string, [string, string, boolean]> = {
+    status: ['/status', 'GET', false],
+    login: ['/desktop/auth/login', 'POST', false],
+    register: ['/desktop/auth/register', 'POST', false],
+    'otp-request': ['/desktop/auth/otp/request', 'POST', payload.purpose === 'bind'],
+    'otp-login': ['/desktop/auth/otp/login', 'POST', false],
+    'password-reset': ['/desktop/auth/password/reset', 'POST', false],
+    profile: ['/account/profile', 'PATCH', true],
+    password: ['/account/password', 'POST', true],
+    contact: ['/account/contact', 'POST', true],
+    security: ['/account/security', 'GET', true],
+    'my-themes': ['/account/themes', 'GET', true],
+    'favorite-themes': ['/account/favorites', 'GET', true]
+  }
+  let route = Object.hasOwn(routes, action) ? routes[action] : undefined
+  if (action === 'themes') {
+    const page = Number(payload.page || 1)
+    const q = typeof payload.q === 'string' ? payload.q.slice(0, 100) : ''
+    if (!Number.isInteger(page) || page < 1 || page > 10000) throw new Error('主题页码无效。')
+    route = [`/themes?${new URLSearchParams({ page: String(page), q })}`, 'GET', true]
+  }
+  if (['theme-favorite', 'theme-report', 'theme-delete'].includes(action)) {
+    if (typeof payload.target !== 'string' || !/^[\w-]{1,128}$/.test(payload.target))
+      throw new Error('主题标识无效。')
+    const suffix =
+      action === 'theme-favorite' ? '/favorite' : action === 'theme-report' ? '/report' : ''
+    route = [
+      `/themes/${payload.target}${suffix}`,
+      action === 'theme-delete' ? 'DELETE' : 'POST',
+      true
+    ]
+  }
+  if (['revoke-device', 'unlink-provider', 'revoke-grant'].includes(action)) {
+    const target = payload.target
+    if (typeof target !== 'string' || !/^[\w.-]{1,128}$/.test(target))
+      throw new Error('账号操作目标无效。')
+    const kind = {
+      'revoke-device': 'devices',
+      'unlink-provider': 'providers',
+      'revoke-grant': 'grants'
+    }[action]
+    route = [`/account/${kind}/${encodeURIComponent(target)}`, 'DELETE', true]
+  }
+  if (!route) throw new Error('不支持此账号操作。')
+  const [path, method, authenticated] = route
+  const serverUrl = await dexServerUrl()
+  const signingIn = ['login', 'register', 'otp-login'].includes(action)
+  const revision = signingIn ? ++accountRevision : accountRevision
+  if (signingIn) attempts.clear()
+  if (signingIn) oauthAttempts.clear()
+  const data = await dexAccountRequest(
+    `/api/v1${path}`,
+    {
+      method,
+      headers: { 'x-dex-client': 'desktop' },
+      ...(method !== 'GET' && method !== 'DELETE'
+        ? { body: JSON.stringify({ ...payload, deviceName: 'Navio · Windows' }) }
+        : {})
+    },
+    authenticated
+  )
+  if (!signingIn) return data
+  const result = data as { accessToken?: string; user?: DexUser }
+  if (typeof result.accessToken !== 'string' || !result.accessToken || !result.user?.id)
+    throw new Error('账号服务没有返回有效的登录凭据。')
+  if (revision !== accountRevision || serverUrl !== (await dexServerUrl()))
+    throw new Error('登录状态已更改，请重新登录。')
+  if (
+    !(await storeVault({ serverUrl, accessToken: result.accessToken, user: result.user }, revision))
+  )
+    throw new Error('登录状态已更改，请重新登录。')
+  return { status: 'online', serverUrl, user: result.user }
+}
+
+export async function startDexOAuth(
+  provider: 'google' | 'github',
+  intent: 'login' | 'link' = 'login'
+): Promise<DexOAuthRequest> {
+  if (!['google', 'github'].includes(provider) || !['login', 'link'].includes(intent))
+    throw new Error('第三方登录方式无效。')
+  const serverUrl = await dexServerUrl()
+  const revision = accountRevision
+  const data = (await dexAccountRequest(
+    '/api/v1/desktop/oauth/start',
+    {
+      method: 'POST',
+      headers: { 'x-dex-client': 'desktop' },
+      body: JSON.stringify({ provider, intent, deviceName: 'Navio · Windows' })
+    },
+    intent === 'link'
+  )) as DexOAuthRequest
+  if (
+    !data.requestCode ||
+    !Number.isFinite(data.expiresIn) ||
+    data.expiresIn <= 0 ||
+    typeof data.authorizationUrl !== 'string'
+  )
+    throw new Error('无效的第三方授权请求。')
+  const url = new URL(data.authorizationUrl, serverUrl)
+  if (
+    url.origin !== serverUrl ||
+    !url.pathname.startsWith('/api/v1/desktop/oauth/') ||
+    url.username ||
+    url.password ||
+    url.hash
+  )
+    throw new Error('第三方授权地址与账号服务不一致。')
+  if (revision !== accountRevision || serverUrl !== (await dexServerUrl()))
+    throw new Error('账号服务已更改，请重试。')
+  const expiresIn = Math.min(data.expiresIn, 600)
+  oauthAttempts.set(data.requestCode, {
+    serverUrl,
+    revision,
+    intent,
+    expires: Date.now() + expiresIn * 1000
+  })
+  try {
+    await shell.openExternal(url.href)
+  } catch (err) {
+    oauthAttempts.delete(data.requestCode)
+    throw err
+  }
+  return {
+    ...data,
+    authorizationUrl: url.href,
+    expiresIn,
+    interval: Math.max(5, Number.isFinite(data.interval) ? data.interval : 5)
+  }
+}
+
+export async function finishDexOAuth(
+  requestCode: string,
+  profile?: Record<string, unknown>
+): Promise<DexOAuthResult> {
+  const attempt = oauthAttempts.get(requestCode)
+  if (
+    !attempt ||
+    attempt.expires <= Date.now() ||
+    attempt.revision !== accountRevision ||
+    attempt.serverUrl !== (await dexServerUrl())
+  ) {
+    oauthAttempts.delete(requestCode)
+    return { status: 'expired' }
+  }
+  let data: {
+    status: string
+    accessToken?: string
+    user?: DexUser
+    provider?: string
+    suggestedEmail?: string
+    emailVerified?: boolean
+  }
+  try {
+    data = (await dexAccountRequest(
+      `/api/v1/desktop/oauth/${profile ? 'complete' : 'poll'}`,
+      {
+        method: 'POST',
+        headers: { 'x-dex-client': 'desktop' },
+        body: JSON.stringify({ ...(profile || {}), requestCode })
+      },
+      attempt.intent === 'link'
+    )) as typeof data
+  } catch (err) {
+    if ([404, 410].includes((err as { status?: number }).status || 0)) {
+      oauthAttempts.delete(requestCode)
+      return { status: 'expired' }
+    }
+    throw err
+  }
+  if (
+    oauthAttempts.get(requestCode) !== attempt ||
+    attempt.revision !== accountRevision ||
+    attempt.expires <= Date.now() ||
+    attempt.serverUrl !== (await dexServerUrl())
+  )
+    return { status: 'expired' }
+  if (data.status === 'pending') return { status: 'pending' }
+  if (data.status === 'registration_required' && attempt.intent === 'login')
+    return {
+      status: 'registration_required',
+      provider: data.provider || '',
+      suggestedEmail: data.suggestedEmail,
+      emailVerified: !!data.emailVerified
+    }
+  if (data.status === 'linked' && attempt.intent === 'link') {
+    oauthAttempts.delete(requestCode)
+    return { status: 'linked' }
+  }
+  if (
+    data.status === 'approved' &&
+    attempt.intent === 'login' &&
+    data.accessToken &&
+    data.user?.id
+  ) {
+    const revision = ++accountRevision
+    attempts.clear()
+    oauthAttempts.clear()
+    if (
+      !(await storeVault(
+        { serverUrl: attempt.serverUrl, accessToken: data.accessToken, user: data.user },
+        revision
+      ))
+    )
+      return { status: 'expired' }
+    return {
+      status: 'approved',
+      account: { status: 'online', serverUrl: attempt.serverUrl, user: data.user }
+    }
+  }
+  throw new Error('第三方授权未完成，请重试。')
+}
+
+export async function cancelDexOAuth(requestCode: string): Promise<void> {
+  const attempt = oauthAttempts.get(requestCode)
+  oauthAttempts.delete(requestCode)
+  if (!attempt || attempt.serverUrl !== (await dexServerUrl())) return
+  await dexAccountRequest(
+    '/api/v1/desktop/oauth/cancel',
+    {
+      method: 'POST',
+      headers: { 'x-dex-client': 'desktop' },
+      body: JSON.stringify({ requestCode })
+    },
+    attempt.intent === 'link'
+  ).catch(() => {})
 }

@@ -19,7 +19,8 @@ const mocks = vi.hoisted(() => {
     frame,
     webContents,
     writeTheme: vi.fn(async () => {}),
-    applyTheme: vi.fn(async () => {})
+    applyTheme: vi.fn(async () => {}),
+    accountRequest: vi.fn()
   }
 })
 vi.mock('electron', () => ({ dialog: {} }))
@@ -28,6 +29,10 @@ vi.mock('../window', () => ({
   mainWindow: { webContents: mocks.webContents, isDestroyed: () => false }
 }))
 vi.mock('./theme', () => ({ writeTheme: mocks.writeTheme, applyTheme: mocks.applyTheme }))
+vi.mock('./dex-account', () => ({
+  dexServerUrl: async () => 'https://navio.mydex.top',
+  dexAccountRequest: mocks.accountRequest
+}))
 vi.mock('../config', () => ({
   getAppConfig: async () => mocks.config,
   patchAppConfig: async (patch: Record<string, string>) => {
@@ -50,6 +55,36 @@ const event = (): IpcMainInvokeEvent =>
   ({ sender: mocks.webContents, senderFrame: mocks.frame }) as unknown as IpcMainInvokeEvent
 
 describe('restricted D.E.X theme IPC adapter', () => {
+  it('installs cloud publications under namespaced local ids instead of overwriting a built-in', async () => {
+    const { dexThemes } = await import('./dex-theme')
+    mocks.accountRequest.mockResolvedValueOnce({
+      item: { theme: structuredClone(BUILTIN_THEMES[0]) }
+    })
+    const applied = (await dexThemes(event(), 'installCloud', {
+      id: 'theme_test-publication'
+    })) as { id: string }
+    expect(applied.id).toMatch(/^cloud-[a-f0-9]{32}$/)
+    expect(mocks.accountRequest).toHaveBeenCalledWith('/api/v1/themes/theme_test-publication')
+    expect(mocks.writeTheme).toHaveBeenCalledWith(`dex-${applied.id}.css`, expect.any(String))
+    expect(
+      ((await dexThemes(event(), 'list')) as { builtins: { id: string }[] }).builtins[0].id
+    ).toBe(BUILTIN_THEMES[0].id)
+  })
+  it('rejects cloud publication path traversal before sending credentials', async () => {
+    const { dexThemes } = await import('./dex-theme')
+    await expect(dexThemes(event(), 'installCloud', { id: '../../admin/users' })).rejects.toThrow(
+      '主题标识'
+    )
+    expect(mocks.accountRequest).not.toHaveBeenCalled()
+  })
+  it('validates a cloud theme before applying its CSS', async () => {
+    const { dexThemes } = await import('./dex-theme')
+    mocks.accountRequest.mockResolvedValueOnce({
+      item: { theme: { ...BUILTIN_THEMES[0], script: 'alert(1)' } }
+    })
+    await expect(dexThemes(event(), 'installCloud', { id: 'theme_bad' })).rejects.toThrow('不支持')
+    expect(mocks.writeTheme).not.toHaveBeenCalled()
+  })
   it('rejects another sender and actions outside the explicit allow-list', async () => {
     const { dexThemes } = await import('./dex-theme')
     await expect(dexThemes({ sender: {} } as IpcMainInvokeEvent, 'list')).rejects.toThrow('来源')

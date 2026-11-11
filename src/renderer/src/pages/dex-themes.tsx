@@ -13,8 +13,8 @@ import {
 } from 'react-icons/lu'
 import { useNavigate } from 'react-router-dom'
 import BasePage from '@renderer/components/base/base-page'
+import ThemeCommunity from '@renderer/components/dex/theme-community'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
-import { openDexAccountPortal } from '@renderer/utils/ipc'
 import { PRODUCT_NAME } from '../../../shared/product'
 import {
   DEX_COLOR_KEYS,
@@ -149,6 +149,7 @@ function Preview({
 }
 
 const DexThemes: React.FC = () => {
+  const [communityOpen, setCommunityOpen] = useState(false)
   const [catalog, setCatalog] = useState<DexThemeCatalog>(blankCatalog)
   const [tab, setTab] = useState<ThemeTab>('builtins')
   const [busy, setBusy] = useState(false)
@@ -271,6 +272,14 @@ const DexThemes: React.FC = () => {
             <p className="mt-1 text-xs text-default-500">选择外观，或编辑并分享自己的设计。</p>
           </div>
           <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="flat"
+              isDisabled={busy}
+              onPress={() => setCommunityOpen(true)}
+            >
+              在线作品与收藏
+            </Button>
             <Button
               size="sm"
               isDisabled={busy}
@@ -720,9 +729,6 @@ const DexThemes: React.FC = () => {
         <ModalContent>
           <ModalHeader>发布「{publishTheme?.name}」</ModalHeader>
           <ModalBody>
-            <Button size="sm" variant="light" onPress={() => void openDexAccountPortal()}>
-              在账号门户管理作品、收藏与举报
-            </Button>
             <p className="break-all text-sm text-default-500">
               目标服务器：{catalog.serverUrl || '尚未配置，请先设置主题服务器'}
             </p>
@@ -765,6 +771,15 @@ const DexThemes: React.FC = () => {
           </ModalFooter>
         </ModalContent>
       </Modal>
+      {communityOpen && (
+        <ThemeCommunity
+          onClose={() => setCommunityOpen(false)}
+          onApplied={() => {
+            void load()
+            mutateAppConfig()
+          }}
+        />
+      )}
     </BasePage>
   )
 }

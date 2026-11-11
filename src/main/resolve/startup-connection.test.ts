@@ -1,0 +1,37 @@
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
+const mocks = vi.hoisted(() => ({ config: vi.fn(), proxy: vi.fn(), core: vi.fn() }))
+vi.mock('../config/app', () => ({ getAppConfig: mocks.config, patchAppConfig: vi.fn() }))
+vi.mock('../config/controledMihomo', () => ({ getControledMihomoConfig: mocks.core }))
+vi.mock('../utils/dirs', () => ({ controledMihomoConfigPath: () => '/config' }))
+vi.mock('../utils/safeFile', () => ({ atomicWriteFile: vi.fn() }))
+vi.mock('../utils/yaml', () => ({ stringify: JSON.stringify }))
+vi.mock('../sys/sysproxy', () => ({ triggerSysProxy: mocks.proxy }))
+beforeEach(() => {
+  vi.clearAllMocks()
+  vi.stubEnv('DEX_TEST_MODE', '')
+  mocks.config.mockResolvedValue({ autoConnect: false, sysProxy: { enable: true } })
+  mocks.core.mockResolvedValue({})
+})
+afterEach(() => vi.unstubAllEnvs())
+describe('startup proxy activation', () => {
+  it('preparing the startup configuration never acquires OS proxy settings', async () => {
+    const { prepareStartupConnection } = await import('./startup-connection')
+    await prepareStartupConnection()
+    expect(mocks.proxy).not.toHaveBeenCalled()
+  })
+  it('requires both saved auto-connect and system-proxy preferences after readiness', async () => {
+    const { restoreStartupProxy } = await import('./startup-connection')
+    await restoreStartupProxy()
+    expect(mocks.proxy).not.toHaveBeenCalled()
+    mocks.config.mockResolvedValue({ autoConnect: true, sysProxy: { enable: true } })
+    await restoreStartupProxy()
+    expect(mocks.proxy).toHaveBeenCalledWith(true)
+  })
+  it('never activates the proxy in isolated test mode', async () => {
+    vi.stubEnv('DEX_TEST_MODE', '1')
+    mocks.config.mockResolvedValue({ autoConnect: true, sysProxy: { enable: true } })
+    const { restoreStartupProxy } = await import('./startup-connection')
+    await restoreStartupProxy()
+    expect(mocks.proxy).not.toHaveBeenCalled()
+  })
+})

@@ -20,6 +20,9 @@ asarUnpack:
 extraResources:
   - from: './extra/'
     to: ''
+    filter:
+      - '**/*'
+      - '!files/{ASN.mmdb,country.mmdb,geoip.dat,geoip.metadb,geosite.dat,BundleMRS.7z}'
 protocols:
   name: 'Navio URI Scheme'
   schemes:

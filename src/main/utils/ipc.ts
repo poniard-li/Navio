@@ -3,6 +3,7 @@ import v8 from 'v8'
 import { readFile } from 'fs/promises'
 import { app, ipcMain, session } from 'electron'
 import i18next from 'i18next'
+import { getGeoResourceStatus, downloadGeoResources } from '../resolve/geo-resources'
 import {
   ipInfoProviderForUrl,
   normalizeNetworkIPInfo,
@@ -291,12 +292,20 @@ const asyncHandlers: Record<string, AsyncFn> = {
     (await import('../resolve/backup-password')).setBackupPassword(password),
   hasBackupPassword: async () => (await import('../resolve/backup-password')).hasBackupPassword(),
   getDexAccount: async () => (await import('../resolve/dex-account')).getDexAccount(),
-  startDexLogin: async () => (await import('../resolve/dex-account')).startDexLogin(),
-  pollDexLogin: async (code: string) => (await import('../resolve/dex-account')).pollDexLogin(code),
+  startDexOAuth: async (
+    ...args: Parameters<typeof import('../resolve/dex-account').startDexOAuth>
+  ) => (await import('../resolve/dex-account')).startDexOAuth(...args),
+  finishDexOAuth: async (
+    ...args: Parameters<typeof import('../resolve/dex-account').finishDexOAuth>
+  ) => (await import('../resolve/dex-account')).finishDexOAuth(...args),
+  cancelDexOAuth: async (code: string) =>
+    (await import('../resolve/dex-account')).cancelDexOAuth(code),
   logoutDexAccount: async () => (await import('../resolve/dex-account')).logoutDexAccount(),
   setDexServerUrl: async (url: string) =>
     (await import('../resolve/dex-account')).setDexServerUrl(url),
-  openDexAccountPortal: async () => (await import('../resolve/dex-account')).openDexAccountPortal(),
+  dexAccountAction: async (
+    ...args: Parameters<typeof import('../resolve/dex-account').dexAccountAction>
+  ) => (await import('../resolve/dex-account')).dexAccountAction(...args),
   saveDexBypass: async (value: unknown) =>
     (await import('../resolve/dex-bypass')).saveDexBypass(value),
   // Mihomo API
@@ -318,6 +327,8 @@ const asyncHandlers: Record<string, AsyncFn> = {
   mihomoChangeProxy,
   mihomoUnfixedProxy,
   mihomoUpgradeGeo,
+  getGeoResourceStatus,
+  downloadGeoResources,
   mihomoUpgrade,
   mihomoUpgradeUI,
   mihomoProxyDelay,

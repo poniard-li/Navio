@@ -282,8 +282,21 @@ interface ISmartModelStatus {
   modified?: number
 }
 
-interface INavioTrayScript { id: string; name: string; path: string; args: string[] }
-interface INavioScriptRun { id: string; name: string; status: 'running' | 'success' | 'failed' | 'stopped'; startedAt: number; finishedAt?: number; exitCode?: number; output: string }
+interface INavioTrayScript {
+  id: string
+  name: string
+  path: string
+  args: string[]
+}
+interface INavioScriptRun {
+  id: string
+  name: string
+  status: 'running' | 'success' | 'failed' | 'stopped'
+  startedAt: number
+  finishedAt?: number
+  exitCode?: number
+  output: string
+}
 
 interface IAppConfig {
   navioTrayScriptsEnabled?: boolean

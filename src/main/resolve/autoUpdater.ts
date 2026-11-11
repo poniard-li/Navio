@@ -2,6 +2,7 @@ import { createHash, randomUUID } from 'crypto'
 import { open, rename, rm } from 'fs/promises'
 import { app, dialog, BrowserWindow, shell } from 'electron'
 import { dexAccountRequest, dexServerUrl } from './dex-account'
+import { fetchReleaseAsset } from './release-download'
 
 interface Release {
   version: string
@@ -29,7 +30,7 @@ export function newerVersion(candidate: string, installed: string): boolean {
 }
 export async function checkUpdate(): Promise<IAppVersion | undefined> {
   const data = (await dexAccountRequest(
-    '/api/v1/releases/latest?product=navio&channel=preview&platform=win32-x64',
+    '/api/v1/releases/latest?product=navio&channel=beta&platform=win32-x64',
     {},
     false
   )) as { release: Release | null }
@@ -68,10 +69,7 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
   const temporary = `${result.filePath}.${randomUUID()}.part`
   downloading = true
   try {
-    const response = await fetch(url, {
-      signal: AbortSignal.timeout(20 * 60 * 1000),
-      redirect: 'error'
-    })
+    const response = await fetchReleaseAsset(url, server, AbortSignal.timeout(20 * 60 * 1000))
     if (!response.ok || !response.body) throw new Error(`下载失败（${response.status}）`)
     const file = await open(temporary, 'wx'),
       hash = createHash('sha256')
@@ -100,7 +98,7 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
     await dialog.showMessageBox({
       type: 'info',
       title: '更新包已下载并通过校验',
-      message: '当前为免安装调试版，请退出 Navio 后解压新版。',
+      message: '当前为免安装公测版，请退出 Navio 后解压新版。',
       detail:
         '将原目录中的 DEX-STUDIO-NEXT 数据文件夹复制到新版目录，可保留本机设置。不要覆盖正在运行的程序。',
       buttons: ['知道了']

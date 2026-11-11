@@ -10,14 +10,17 @@ import {
   Spinner
 } from '@heroui/react'
 import {
+  dexAccountAction,
   getDexAccount,
-  startDexLogin,
-  pollDexLogin,
+  startDexOAuth,
   setDexServerUrl,
   type DexAccount,
-  type DexDeviceLogin
+  type DexOAuthRequest,
+  type DexServiceStatus
 } from '@renderer/utils/ipc'
 import { markInitialContentPartReady } from '@renderer/utils/startup'
+import AccountForm from './account-form'
+import OAuthFlow from './oauth-flow'
 import '../../assets/navio.css'
 
 export default function AccountGate({
@@ -29,15 +32,23 @@ export default function AccountGate({
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState('')
-  const [login, setLogin] = useState<DexDeviceLogin>()
-  const [server, setServer] = useState('https://account.mydex.top')
+  const [oauth, setOAuth] = useState<DexOAuthRequest>()
+  const [server, setServer] = useState('https://navio.mydex.top')
+  const [status, setStatus] = useState<DexServiceStatus>()
   const [settings, setSettings] = useState(false)
   const [purpose, setPurpose] = useState(false)
+  const [showForm, setShowForm] = useState(false)
   const refresh = useCallback(async (): Promise<void> => {
     try {
       const result = await getDexAccount()
       setAccount(result)
       setServer(result.serverUrl)
+      if (result.status === 'signed-out') {
+        setStatus(undefined)
+        void dexAccountAction<DexServiceStatus>('status')
+          .then(setStatus)
+          .catch(() => {})
+      }
     } catch (err) {
       setError(String(err))
     } finally {
@@ -58,53 +69,9 @@ export default function AccountGate({
     markInitialContentPartReady('route')
     markInitialContentPartReady('sider')
   }, [loading, account])
-  useEffect(() => {
-    if (!login) return
-    let cancelled = false
-    let timer: ReturnType<typeof setTimeout>
-    const deadline = Date.now() + login.expiresIn * 1000
-    const poll = async (): Promise<void> => {
-      if (cancelled) return
-      if (Date.now() >= deadline) {
-        setLogin(undefined)
-        setError('本次登录已过期，请重新打开登录页面。')
-        return
-      }
-      try {
-        const result = await pollDexLogin(login.deviceCode)
-        if (cancelled) return
-        if (result.status === 'complete') {
-          setLogin(undefined)
-          await refresh()
-          return
-        }
-        if (result.status === 'expired') {
-          setLogin(undefined)
-          setError('本次登录已过期，请重试。')
-          return
-        }
-      } catch (err) {
-        if (!cancelled) setError(`暂时无法确认授权，正在重试。${String(err)}`)
-      }
-      timer = setTimeout(() => void poll(), Math.max(2, login.interval) * 1000)
-    }
-    timer = setTimeout(() => void poll(), Math.max(2, login.interval) * 1000)
-    return () => {
-      cancelled = true
-      clearTimeout(timer)
-    }
-  }, [login, refresh])
-  const begin = async (): Promise<void> => {
-    setPurpose(false)
-    setBusy(true)
-    setError('')
-    try {
-      setLogin(await startDexLogin())
-    } catch (err) {
-      setError(String(err))
-    } finally {
-      setBusy(false)
-    }
+  const complete = (): void => {
+    setOAuth(undefined)
+    void refresh()
   }
   if (loading)
     return (
@@ -136,37 +103,32 @@ export default function AccountGate({
             <br />
             让每一次选择更清晰。
           </p>
-          <small>Built by D.E.X Studio</small>
+          <small>Public Beta · Built by D.E.X Studio</small>
         </section>
         <section className="navio-auth-panel">
           <h2>欢迎使用 Navio</h2>
-          <p>
-            使用 D.E.X 统一账号，进入你的主题空间。已有账号可直接继续，所有 D.E.X 服务使用同一身份。
-          </p>
-          {login ? (
-            <>
-              <p className="mt-5">请在已打开的浏览器中登录，并核对设备代码：</p>
-              <p className="navio-auth-code">{login.userCode}</p>
-              <Button fullWidth variant="flat" onPress={() => window.open(login.verificationUri)}>
-                重新打开授权页面
-              </Button>
-              <Button
-                fullWidth
-                variant="light"
-                className="mt-2"
-                onPress={() => setLogin(undefined)}
-              >
-                取消本次登录
-              </Button>
-            </>
+          <p>使用 D.E.X 统一账号，进入你的主题空间。注册、登录和账号管理，都可以在软件内完成。</p>
+          {oauth ? (
+            <OAuthFlow request={oauth} onComplete={complete} onCancel={() => setOAuth(undefined)} />
+          ) : showForm ? (
+            <AccountForm
+              onComplete={complete}
+              oauthBusy={busy}
+              status={status}
+              onOAuth={async (provider) => {
+                setBusy(true)
+                setError('')
+                try {
+                  setOAuth(await startDexOAuth(provider))
+                } catch (err) {
+                  setError(String(err))
+                } finally {
+                  setBusy(false)
+                }
+              }}
+            />
           ) : (
-            <Button
-              className="mt-6"
-              color="primary"
-              fullWidth
-              isLoading={busy}
-              onPress={() => setPurpose(true)}
-            >
+            <Button className="mt-6" color="primary" fullWidth onPress={() => setPurpose(true)}>
               登录或注册 D.E.X 账号
             </Button>
           )}
@@ -194,6 +156,7 @@ export default function AccountGate({
               />
               <Button
                 size="sm"
+                isDisabled={!!oauth || busy}
                 onPress={async () => {
                   try {
                     await setDexServerUrl(server)
@@ -219,14 +182,24 @@ export default function AccountGate({
               产品的统一登录。它不会提供代理线路，也不是订阅服务商账号。
             </p>
             <p className="text-sm leading-7">
-              订阅链接与节点凭据保留在本机。注册会验证一个邮箱或手机号；你可以在账号门户管理绑定和授权。首次登录后，暂时断网仍可使用本机代理与已保存的配置。
+              注册会验证一个邮箱或手机号。账号资料、验证码发送及主题服务由 D.E.X
+              服务器处理；订阅链接、节点凭据和代理流量不上传到账号服务器。你可以在软件内找回密码、管理绑定与登录设备。
+            </p>
+            <p className="text-sm leading-7">
+              首次登录后，暂时断网仍可使用本机代理与已保存的配置。
             </p>
           </ModalBody>
           <ModalFooter>
             <Button variant="light" onPress={() => setPurpose(false)}>
               返回
             </Button>
-            <Button color="primary" onPress={begin}>
+            <Button
+              color="primary"
+              onPress={() => {
+                setPurpose(false)
+                setShowForm(true)
+              }}
+            >
               了解，继续
             </Button>
           </ModalFooter>

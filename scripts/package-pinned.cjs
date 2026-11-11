@@ -35,6 +35,14 @@ if (
   isInside(stage, output)
 )
   throw new Error('Unsafe staging directory')
+const excludedData = new Set([
+  'ASN.mmdb',
+  'country.mmdb',
+  'geoip.dat',
+  'geoip.metadb',
+  'geosite.dat',
+  'BundleMRS.7z'
+])
 const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).digest('hex')
 ;(async () => {
   const pins = JSON.parse(await fs.readFile(path.join(root, 'PINNED-RESOURCES.json'), 'utf8'))
@@ -64,12 +72,22 @@ const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).dige
     'DEX-THIRD-PARTY-NOTICES.txt',
     'DEX-BUILD.txt',
     'NATIVE-BUILD.txt',
-    'PINNED-RESOURCES.json'
+    'PINNED-RESOURCES.json',
+    'Navio-使用说明.txt',
+    'Navio-验证记录.txt'
   ]) {
     if (fss.existsSync(path.join(root, file)))
       await fs.copyFile(path.join(root, file), path.join(appStage, file))
   }
   await fs.mkdir(output, { recursive: true })
+  if (fss.existsSync(path.join(root, 'third-party'))) {
+    await fs.cp(path.join(root, 'third-party'), path.join(appStage, 'third-party'), {
+      recursive: true
+    })
+    await fs.cp(path.join(root, 'third-party'), path.join(output, 'third-party'), {
+      recursive: true
+    })
+  }
   for (const entry of await fs.readdir(reference, { withFileTypes: true })) {
     if (['resources', 'data', 'DEX-STUDIO-NEXT', 'Clash Party.exe'].includes(entry.name)) continue
     await fs.cp(path.join(reference, entry.name), path.join(output, entry.name), {
@@ -79,8 +97,17 @@ const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).dige
   await fs.mkdir(path.join(output, 'resources'), { recursive: true })
   for (const dir of ['files', 'sidecar']) {
     await fs.cp(path.join(root, 'extra', dir), path.join(output, 'resources', dir), {
-      recursive: true
+      recursive: true,
+      filter: (source) => dir !== 'files' || !excludedData.has(path.basename(source))
     })
+  }
+  // Refuse stale files when reusing an output directory; never publish archived Geo snapshots.
+  for (const file of excludedData) {
+    const target = path.join(output, 'resources/files', file)
+    if (fss.existsSync(target))
+      throw new Error(
+        `Output contains excluded archived data: ${file}; use a fresh output directory`
+      )
   }
   if (fss.existsSync(path.join(reference, 'resources/app.asar.unpacked')))
     await fs.cp(
@@ -103,7 +130,10 @@ const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).dige
       icon.icons.map((i) => i.data)
     )
   for (const vi of ResEdit.Resource.VersionInfo.fromEntries(resources.entries)) {
-    const versionParts = pkg.version.split(/[.-]/).filter((part) => /^\d+$/.test(part)).map(Number)
+    const versionParts = pkg.version
+      .split(/[.-]/)
+      .filter((part) => /^\d+$/.test(part))
+      .map(Number)
     vi.setFileVersion(...versionParts.slice(0, 4))
     vi.setProductVersion(...versionParts.slice(0, 4))
     for (const lang of vi.getAvailableLanguages())
@@ -130,7 +160,10 @@ const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).dige
     stableCore: 'Mihomo v1.19.32',
     optionalCores: pins.optionalCores,
     sourceRuntimeAsarSha256: hash(path.join(reference, 'resources/app.asar')),
-    sidecars
+    sidecars,
+    excludedArchivedData: [...excludedData],
+    dataProvisioning:
+      'User-initiated HTTPS download from configured geox-url sources; no historic GeoIP/ASN/domain data bundled'
   }
   await fs.writeFile(
     path.join(output, 'DEX-BUILD-MANIFEST.json'),
@@ -141,7 +174,9 @@ const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).dige
     'DEX-THIRD-PARTY-NOTICES.txt',
     'DEX-BUILD.txt',
     'NATIVE-BUILD.txt',
-    'PINNED-RESOURCES.json'
+    'PINNED-RESOURCES.json',
+    'Navio-使用说明.txt',
+    'Navio-验证记录.txt'
   ])
     if (fss.existsSync(path.join(root, file)))
       await fs.copyFile(path.join(root, file), path.join(output, file))

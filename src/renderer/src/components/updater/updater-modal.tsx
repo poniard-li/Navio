@@ -52,7 +52,7 @@ const UpdaterModal: React.FC<Props> = (props) => {
             size="sm"
             className="flex app-nodrag"
             onPress={() => {
-              open('https://navio.mydex.top/#updates')
+              open('https://github.com/poniard-li/Navio/releases')
             }}
           >
             {t('common.updater.goToDownload')}

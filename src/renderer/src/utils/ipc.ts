@@ -1,6 +1,19 @@
 import { TitleBarOverlayOptions } from 'electron'
 import type { NetworkIPInfo } from '../../../shared/network-info'
 import type {
+  DexAccount,
+  DexAccountAction,
+  DexOAuthRequest,
+  DexOAuthResult
+} from '../../../shared/dex-account'
+export type {
+  DexAccount,
+  DexAccountSecurity,
+  DexServiceStatus,
+  DexOAuthRequest,
+  DexOAuthResult
+} from '../../../shared/dex-account'
+import type {
   TrafficUsageAggregate,
   TrafficUsageBreakdownQuery,
   TrafficUsageDimension,
@@ -37,6 +50,8 @@ interface IpcApi {
   mihomoChangeProxy: (group: string, proxy: string) => Promise<IMihomoProxy>
   mihomoUnfixedProxy: (group: string) => Promise<IMihomoProxy>
   mihomoUpgradeGeo: () => Promise<void>
+  getGeoResourceStatus: () => Promise<string[]>
+  downloadGeoResources: () => Promise<void>
   mihomoUpgrade: () => Promise<void>
   mihomoUpgradeUI: () => Promise<void>
   mihomoProxyDelay: (proxy: string, url?: string, provider?: string) => Promise<IMihomoDelay>
@@ -300,6 +315,8 @@ export const {
   mihomoChangeProxy,
   mihomoUnfixedProxy,
   mihomoUpgradeGeo,
+  getGeoResourceStatus,
+  downloadGeoResources,
   mihomoUpgrade,
   mihomoUpgradeUI,
   mihomoProxyDelay,
@@ -516,27 +533,22 @@ export function getAppInfo(metadata: IMihomoConnectionDetail['metadata']): Promi
   return invoke<IAppInfo>('getAppInfo', metadata)
 }
 
-export interface DexAccount {
-  status: 'signed-out' | 'online' | 'offline'
-  user?: { id: string; username: string; displayName: string; email?: string; phone?: string }
-  serverUrl: string
-}
-export interface DexDeviceLogin {
-  deviceCode: string
-  userCode: string
-  verificationUri: string
-  expiresIn: number
-  interval: number
-}
 export const getDexAccount = (): Promise<DexAccount> => invoke('getDexAccount')
-export const startDexLogin = (): Promise<DexDeviceLogin> => invoke('startDexLogin')
-export const pollDexLogin = (
-  deviceCode: string
-): Promise<{ status: 'pending' | 'complete' | 'expired'; account?: DexAccount }> =>
-  invoke('pollDexLogin', deviceCode)
+export const startDexOAuth = (
+  provider: 'google' | 'github',
+  intent: 'login' | 'link' = 'login'
+): Promise<DexOAuthRequest> => invoke('startDexOAuth', provider, intent)
+export const finishDexOAuth = (
+  code: string,
+  profile?: Record<string, unknown>
+): Promise<DexOAuthResult> => invoke('finishDexOAuth', code, profile)
+export const cancelDexOAuth = (code: string): Promise<void> => invoke('cancelDexOAuth', code)
 export const logoutDexAccount = (): Promise<void> => invoke('logoutDexAccount')
 export const setDexServerUrl = (url: string): Promise<void> => invoke('setDexServerUrl', url)
-export const openDexAccountPortal = (): Promise<void> => invoke('openDexAccountPortal')
+export const dexAccountAction = <T = unknown>(
+  action: DexAccountAction,
+  payload: Record<string, unknown> = {}
+): Promise<T> => invoke('dexAccountAction', action, payload)
 export const setBackupPassword = (password: string): Promise<void> =>
   invoke('setBackupPassword', password)
 export const hasBackupPassword = (): Promise<boolean> => invoke('hasBackupPassword')

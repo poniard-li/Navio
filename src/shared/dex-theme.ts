@@ -39,7 +39,8 @@ export const DEX_THEME_ACTIONS = [
   'refresh',
   'publish',
   'preview',
-  'cancelPreview'
+  'cancelPreview',
+  'installCloud'
 ] as const
 export type DexThemeAction = (typeof DEX_THEME_ACTIONS)[number]
 

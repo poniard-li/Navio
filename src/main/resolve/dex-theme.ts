@@ -39,6 +39,18 @@ async function catalog(): Promise<DexThemeCatalog> {
 }
 async function execute(action: string, payload: Record<string, unknown>): Promise<unknown> {
   if (action === 'list') return catalog()
+  if (action === 'installCloud') {
+    const id = payload.id
+    if (typeof id !== 'string' || !/^[\w-]{1,128}$/.test(id)) throw new Error('主题标识无效')
+    const result = (await dexAccountRequest(`/api/v1/themes/${id}`)) as { item: { theme: unknown } }
+    const theme = validateDexTheme(result.item.theme)
+    theme.id = `cloud-${createHash('sha256')
+      .update(`${await dexServerUrl()}/${id}`)
+      .digest('hex')
+      .slice(0, 32)}`
+    await service().save({ theme })
+    return execute('apply', { id: theme.id })
+  }
   if (action === 'cancelPreview') {
     await clearPreview()
     return { ok: true }
@@ -106,7 +118,7 @@ async function execute(action: string, payload: Record<string, unknown>): Promis
           themes.push(theme)
         }
         if (!data.themes.length || page * 40 >= data.total) break
-        if (page === 100) throw new Error('目录较大，请在账号门户搜索主题。')
+        if (page === 100) throw new Error('主题目录过大，请稍后重试或联系管理员。')
       }
       await service().setRemote(themes)
     } catch (error) {

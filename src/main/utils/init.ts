@@ -5,7 +5,6 @@ import { promisify } from 'util'
 import path from 'path'
 import { app, dialog } from 'electron'
 import {
-  startPacServer,
   startSubStoreBackendServer,
   startSubStoreFrontendServer,
   subStorePort,
@@ -457,10 +456,8 @@ export async function init(): Promise<void> {
     (async (): Promise<void> => {
       try {
         if (testMode) return
-        if (autoConnect && sysProxy.enable) {
-          await startPacServer()
-        }
-        await triggerSysProxy(autoConnect && sysProxy.enable)
+        // Restoring a saved connection waits for successful core startup in index.ts.
+        if (!autoConnect || !sysProxy.enable) await triggerSysProxy(false)
       } catch {
         // ignore
       }

@@ -3,8 +3,8 @@ import { toast } from '@renderer/components/base/toast'
 import SettingCard from '@renderer/components/base/base-setting-card'
 import SettingItem from '@renderer/components/base/base-setting-item'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
-import { mihomoUpgradeGeo } from '@renderer/utils/ipc'
-import { useState } from 'react'
+import { mihomoUpgradeGeo, getGeoResourceStatus, downloadGeoResources } from '@renderer/utils/ipc'
+import { useEffect, useState } from 'react'
 import { IoMdRefresh } from 'react-icons/io'
 import { useTranslation } from 'react-i18next'
 import { HelpTip } from '@renderer/components/dex/feature-help'
@@ -28,9 +28,46 @@ const GeoData: React.FC = () => {
   const [mmdbInput, setMmdbInput] = useState(geoxUrl.mmdb)
   const [asnInput, setAsnInput] = useState(geoxUrl.asn)
   const [updating, setUpdating] = useState(false)
+  const [missing, setMissing] = useState<string[]>([])
+  const [downloading, setDownloading] = useState(false)
+  useEffect(() => {
+    void getGeoResourceStatus()
+      .then(setMissing)
+      .catch(() => {})
+  }, [])
 
   return (
     <SettingCard>
+      <div className="p-4 border-b border-divider space-y-2">
+        <h3 className="font-medium">按需获取最新规则数据库</h3>
+        <p className="text-sm text-default-500">
+          公开版不附带历史 GeoIP / ASN
+          数据。首次使用需要这些数据的规则时，请从下方已保存的来源下载；默认来源为 MetaCubeX 的
+          GitHub
+          数据发布。下载只保存到本机，不上传订阅或节点，不会自动开启代理。数据来源可能根据网络状况暂时不可达。
+        </p>
+        {missing.length > 0 && <p className="text-sm text-warning">待获取：{missing.join('、')}</p>}
+        <Button
+          size="sm"
+          color="primary"
+          variant="flat"
+          isLoading={downloading}
+          onPress={async () => {
+            setDownloading(true)
+            try {
+              await downloadGeoResources()
+              setMissing(await getGeoResourceStatus())
+              toast.success('数据库已下载。若内核此前启动失败，请重启内核后重试连接。')
+            } catch (e) {
+              toast.error(String(e))
+            } finally {
+              setDownloading(false)
+            }
+          }}
+        >
+          下载最新数据库
+        </Button>
+      </div>
       <SettingItem
         title={
           <>

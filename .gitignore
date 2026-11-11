@@ -7,8 +7,15 @@ out
 .DS_Store
 *.log*
 .idea
-*.ttf
 party.md
 CLAUDE.md
 agent.md
 tsconfig.node.tsbuildinfo
+*.tsbuildinfo
+.env
+.env.*
+!.env.example
+DEX-STUDIO-NEXT/
+*.vault
+*.sqlite*
+*.db

@@ -21,7 +21,7 @@ vi.mock('electron', () => ({
 }))
 vi.mock('../utils/dirs', () => ({ dataDir: () => mocks.directory }))
 
-const origin = 'https://account.mydex.top'
+const origin = 'https://navio.mydex.top'
 const user = { id: 'account-test-user', username: 'navio_test', displayName: '账号测试' }
 const accessToken = 'opaque-token-only-for-isolated-unit-tests'
 const device = {
@@ -89,8 +89,8 @@ afterEach(async () => {
 
 describe('Navio account origin boundary', () => {
   it.each([
-    ['https://account.mydex.top/', origin],
-    ['https://ACCOUNT.MYDEX.TOP:443', origin],
+    ['https://navio.mydex.top/', origin],
+    ['https://NAVIO.MYDEX.TOP:443', origin],
     ['http://localhost:3210', 'http://localhost:3210'],
     ['http://127.0.0.1:3210/', 'http://127.0.0.1:3210'],
     ['http://[::1]:3210', 'http://[::1]:3210']
@@ -99,11 +99,11 @@ describe('Navio account origin boundary', () => {
   })
 
   it.each([
-    'http://account.mydex.top',
-    'https://user:password@account.mydex.top',
-    'https://account.mydex.top/account/',
-    'https://account.mydex.top?token=abc',
-    'https://account.mydex.top/#section',
+    'http://navio.mydex.top',
+    'https://user:password@navio.mydex.top',
+    'https://navio.mydex.top/account/',
+    'https://navio.mydex.top?token=abc',
+    'https://navio.mydex.top/#section',
     'file:///C:/account',
     'javascript:alert(1)',
     'not-a-domain',
@@ -185,9 +185,9 @@ describe('first use and durable device login', () => {
 
   it.each([
     'https://outside.example/account/',
-    'http://account.mydex.top/account/',
+    'http://navio.mydex.top/account/',
     '//outside.example/account/',
-    'https://name:password@account.mydex.top/account/'
+    'https://name:password@navio.mydex.top/account/'
   ])('does not open an unsafe verification return URL: %s', async (verificationUri) => {
     mocks.fetch.mockResolvedValueOnce(response({ ...device, verificationUri }))
     await expect(account.startDexLogin()).rejects.toThrow('来源不一致')
@@ -242,6 +242,139 @@ describe('first use and durable device login', () => {
     await account.startDexLogin()
     mocks.fetch.mockResolvedValueOnce(response({ status: 'pending', accessToken, user }))
     expect(await account.pollDexLogin(device.deviceCode)).toEqual({ status: 'pending' })
+    await assertNoVault()
+  })
+})
+
+describe('in-app account operations', () => {
+  it('stores a native password login securely and never gives its token to the renderer', async () => {
+    mocks.fetch.mockResolvedValueOnce(response({ accessToken, user }))
+    const result = await account.dexAccountAction('login', {
+      identifier: 'navio_test',
+      password: 'local-test-password'
+    })
+    expect(result).toEqual({ status: 'online', serverUrl: origin, user })
+    expect(JSON.stringify(result)).not.toContain(accessToken)
+    const [url, options] = mocks.fetch.mock.calls[0]
+    expect(url).toBe(`${origin}/api/v1/desktop/auth/login`)
+    expect(new Headers(options.headers).get('x-dex-client')).toBe('desktop')
+    expect(new Headers(options.headers).has('Cookie')).toBe(false)
+    expect(JSON.parse(mocks.decrypt(await readFile(vaultFile()))).accessToken).toBe(accessToken)
+  })
+
+  it('requests password recovery without a session and never claims that recovery logged in', async () => {
+    mocks.fetch.mockResolvedValueOnce(response({ ok: true }))
+    expect(
+      await account.dexAccountAction('password-reset', {
+        contact: 'test@example.com',
+        code: '123456',
+        newPassword: 'replacement-test-password'
+      })
+    ).toEqual({ ok: true })
+    expect(mocks.fetch.mock.calls[0][0]).toBe(`${origin}/api/v1/desktop/auth/password/reset`)
+    await assertNoVault()
+  })
+
+  it('requires a logged-in session for binding codes and account security actions', async () => {
+    await expect(
+      account.dexAccountAction('otp-request', { purpose: 'bind', contact: 'test@example.com' })
+    ).rejects.toThrow('请先登录')
+    await expect(account.dexAccountAction('security')).rejects.toThrow('请先登录')
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('rejects arbitrary routes and path traversal in operation targets before any network request', async () => {
+    await expect(account.dexAccountAction('/api/v1/admin/users' as never)).rejects.toThrow('不支持')
+    await expect(account.dexAccountAction('revoke-device', { target: '../users' })).rejects.toThrow(
+      '目标无效'
+    )
+    await expect(account.dexAccountAction('toString' as never)).rejects.toThrow('不支持')
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+
+  it('does not revive a native login that completed after local logout', async () => {
+    let finish!: (r: Response) => void
+    let started!: () => void
+    const ready = new Promise<void>((resolve) => {
+      started = resolve
+    })
+    mocks.fetch.mockImplementationOnce(
+      () =>
+        new Promise<Response>((resolve) => {
+          finish = resolve
+          started()
+        })
+    )
+    const pending = account.dexAccountAction('login', {
+      identifier: 'navio_test',
+      password: 'local-test-password'
+    })
+    await ready
+    await account.logoutDexAccount()
+    finish(response({ accessToken, user }))
+    await expect(pending).rejects.toThrow('登录状态已更改')
+    await assertNoVault()
+  })
+})
+
+describe('native OAuth bridge', () => {
+  const oauth = {
+    requestCode: 'native-oauth-request',
+    authorizationUrl: `${origin}/api/v1/desktop/oauth/google/authorize?launch=test-launch`,
+    expiresIn: 600,
+    interval: 5
+  }
+
+  it('opens only the same-origin launch endpoint in the system browser', async () => {
+    mocks.fetch.mockResolvedValueOnce(response(oauth))
+    expect(await account.startDexOAuth('google')).toEqual(oauth)
+    expect(mocks.openExternal).toHaveBeenCalledWith(oauth.authorizationUrl)
+    expect(mocks.fetch.mock.calls[0][0]).toBe(`${origin}/api/v1/desktop/oauth/start`)
+  })
+
+  it.each([
+    'https://outside.example/start',
+    `${origin}/account/`,
+    `${origin}/api/v1/desktop/oauth/google/authorize#secret`
+  ])('rejects an unexpected launch URL %s', async (authorizationUrl) => {
+    mocks.fetch.mockResolvedValueOnce(response({ ...oauth, authorizationUrl }))
+    await expect(account.startDexOAuth('google')).rejects.toThrow('授权地址')
+    expect(mocks.openExternal).not.toHaveBeenCalled()
+  })
+
+  it('completes first-time third-party registration in the app and hides the issued token', async () => {
+    mocks.fetch.mockResolvedValueOnce(response(oauth))
+    await account.startDexOAuth('google')
+    mocks.fetch.mockResolvedValueOnce(
+      response({
+        status: 'registration_required',
+        provider: 'google',
+        suggestedEmail: 'test@example.com',
+        emailVerified: true
+      })
+    )
+    expect(await account.finishDexOAuth(oauth.requestCode)).toMatchObject({
+      status: 'registration_required',
+      emailVerified: true
+    })
+    await assertNoVault()
+    mocks.fetch.mockResolvedValueOnce(response({ status: 'approved', accessToken, user }))
+    const result = await account.finishDexOAuth(oauth.requestCode, { username: 'native_test' })
+    expect(result).toEqual({
+      status: 'approved',
+      account: { status: 'online', serverUrl: origin, user }
+    })
+    expect(JSON.stringify(result)).not.toContain(accessToken)
+    expect(mocks.fetch.mock.calls.at(-1)?.[0]).toBe(`${origin}/api/v1/desktop/oauth/complete`)
+  })
+
+  it('cancels an OAuth request locally even when the server is unavailable', async () => {
+    mocks.fetch.mockResolvedValueOnce(response(oauth))
+    await account.startDexOAuth('google')
+    await account.cancelDexOAuth(oauth.requestCode)
+    mocks.fetch.mockClear()
+    expect(await account.finishDexOAuth(oauth.requestCode)).toEqual({ status: 'expired' })
+    expect(mocks.fetch).not.toHaveBeenCalled()
     await assertNoVault()
   })
 })

@@ -109,7 +109,8 @@ async function updateGist(token: string, id: string, content: string): Promise<v
 
 export async function getGistUrl(): Promise<string> {
   const { githubToken, gistSyncEnabled } = await getAppConfig()
-  if (!gistSyncEnabled) throw new Error('请先明确启用 GitHub Gist 同步；它会将运行配置上传至 GitHub。')
+  if (!gistSyncEnabled)
+    throw new Error('请先明确启用 GitHub Gist 同步；它会将运行配置上传至 GitHub。')
   if (!githubToken) return ''
   const gists = await listGists(githubToken)
   const gist = gists.find((gist) => gist.description === 'Auto Synced Clash Party Runtime Config')
@@ -125,7 +126,12 @@ export async function getGistUrl(): Promise<string> {
 }
 
 async function uploadRuntimeConfigContent(runtimeConfig: string): Promise<boolean> {
-  const { githubToken, gistAgeEncrypt = false, gistAgeRecipient, gistSyncEnabled } = await getAppConfig()
+  const {
+    githubToken,
+    gistAgeEncrypt = false,
+    gistAgeRecipient,
+    gistSyncEnabled
+  } = await getAppConfig()
   if (!gistSyncEnabled || !githubToken) return false
   const gists = await listGists(githubToken)
   const gist = gists.find((gist) => gist.description === 'Auto Synced Clash Party Runtime Config')

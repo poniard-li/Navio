@@ -1,0 +1,39 @@
+name: 错误反馈
+description: 报告 Navio 的可复现问题
+title: '[Bug] '
+body:
+  - type: markdown
+    attributes:
+      value: 请先搜索已有问题。不要上传订阅链接、账号密码、验证码、令牌或未脱敏日志；安全漏洞请查看 SECURITY.md。
+  - type: input
+    id: version
+    attributes:
+      label: Navio 版本
+      placeholder: 例如 0.6.0-beta.1
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows 版本与架构
+      placeholder: 例如 Windows 11 24H2 x64
+    validations:
+      required: true
+  - type: textarea
+    id: reproduce
+    attributes:
+      label: 复现步骤
+      description: 描述从启动软件到出现问题的最短操作过程。
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: 期望结果与实际结果
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 已脱敏的日志或截图
+      description: 可选。请遮盖私人网络信息，并移除订阅、密码和会话数据。

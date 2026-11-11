@@ -1,0 +1,34 @@
+[
+  {
+    "component": "Clash Party 2.0.4",
+    "revision": "refs/tags/v2.0.4",
+    "sourceArchive": "clash-party-v2.0.4-source.zip",
+    "upstreamSourceUrl": "https://codeload.github.com/mihomo-party-org/clash-party/zip/refs/tags/v2.0.4",
+    "sha256": "104db18655bc432326a8a0d9794e6b6f7c534aa78b7dec6fea9b582ba4f86ff3",
+    "releaseAssets": "https://github.com/poniard-li/Navio/releases/tag/v0.6.0-beta.1"
+  },
+  {
+    "component": "Mihomo v1.19.32",
+    "revision": "88dcbf7f1614a67c3b36b848ee3592dfa92ada36",
+    "sourceArchive": "mihomo-v1.19.32-source.zip",
+    "upstreamSourceUrl": "https://codeload.github.com/MetaCubeX/mihomo/zip/88dcbf7f1614a67c3b36b848ee3592dfa92ada36",
+    "sha256": "63ad2b98fb7a1067422af350a172e2c656c45a2564d0202b5181c6dc4cc7dd30",
+    "releaseAssets": "https://github.com/poniard-li/Navio/releases/tag/v0.6.0-beta.1"
+  },
+  {
+    "component": "Mihomo alpha",
+    "revision": "94b13aed49b8dc41973e4bb3f721c5fa2c5c5c1f",
+    "sourceArchive": "mihomo-alpha-94b13aed-source.zip",
+    "upstreamSourceUrl": "https://codeload.github.com/MetaCubeX/mihomo/zip/94b13aed49b8dc41973e4bb3f721c5fa2c5c5c1f",
+    "sha256": "bb3f69e3ddb652b4c11096dae72b65391a47ee4e6ebe4471c0b79c19aa2948c6",
+    "releaseAssets": "https://github.com/poniard-li/Navio/releases/tag/v0.6.0-beta.1"
+  },
+  {
+    "component": "Mihomo Smart",
+    "revision": "83e67d0c4415b1114f9e01d8e9a00133caf89f6c",
+    "sourceArchive": "mihomo-smart-83e67d0c-source.zip",
+    "upstreamSourceUrl": "https://codeload.github.com/vernesong/mihomo/zip/83e67d0c4415b1114f9e01d8e9a00133caf89f6c",
+    "sha256": "34c71f7434ebb82eda7474d9aa0c4addab00d4585f262776ba8085305e44f1dd",
+    "releaseAssets": "https://github.com/poniard-li/Navio/releases/tag/v0.6.0-beta.1"
+  }
+]

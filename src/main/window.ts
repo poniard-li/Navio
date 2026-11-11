@@ -310,7 +310,13 @@ function setupWindowEvents(window: BrowserWindow): void {
 
     if (!(await getAppConfig()).trayCloseNotified && process.env.DEX_TEST_MODE !== '1') {
       await patchAppConfig({ trayCloseNotified: true })
-      void dialog.showMessageBox({ type: 'info', title: 'Navio 仍在运行', message: '窗口已收起到系统托盘，当前连接保持不变。', detail: '点击托盘图标可重新打开；需要结束程序时，请在托盘菜单中选择“退出”。', buttons: ['知道了'] })
+      void dialog.showMessageBox({
+        type: 'info',
+        title: 'Navio 仍在运行',
+        message: '窗口已收起到系统托盘，当前连接保持不变。',
+        detail: '点击托盘图标可重新打开；需要结束程序时，请在托盘菜单中选择“退出”。',
+        buttons: ['知道了']
+      })
     }
 
     const {

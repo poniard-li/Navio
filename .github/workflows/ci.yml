@@ -1,0 +1,31 @@
+name: Desktop checks
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: checks-${{ github.ref }}
+  cancel-in-progress: true
+jobs:
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+      - name: Install locked dependencies without downloading runtime assets
+        run: pnpm install --ignore-scripts --frozen-lockfile
+      - name: Format
+        run: pnpm run format:check
+      - name: Lint
+        run: pnpm run lint:check
+      - name: Typecheck
+        run: pnpm run typecheck
+      - name: Windows unit tests
+        run: pnpm exec vitest run --exclude src/main/utils/app-info/linux.test.ts
