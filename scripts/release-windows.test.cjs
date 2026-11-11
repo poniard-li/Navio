@@ -7,7 +7,8 @@ const { spawnSync } = require('node:child_process')
 const { overlaps, validatePaths, builderConfig } = require('./release-windows.cjs')
 
 test('release paths reject existing directories, source trees and overlapping stages', async () => {
-  const directory = await fs.mkdtemp(path.join(os.tmpdir(), 'navio-release-paths-'))
+  const temporaryRoot = await fs.realpath(os.tmpdir())
+  const directory = await fs.mkdtemp(path.join(temporaryRoot, 'navio-release-paths-'))
   const reference = path.join(directory, 'reference')
   await fs.mkdir(path.join(reference, 'resources'), { recursive: true })
   await fs.writeFile(path.join(reference, 'resources/app.asar'), '')
@@ -23,7 +24,8 @@ test('release paths reject existing directories, source trees and overlapping st
     assert.equal(overlaps(path.join(directory, 'work'), path.join(directory, 'work-copy')), false)
   } finally {
     // Only remove the exact temporary fixture created by this test.
-    assert.ok(directory.startsWith(path.join(os.tmpdir(), 'navio-release-paths-')))
+    assert.equal(path.dirname(directory), temporaryRoot)
+    assert.ok(path.basename(directory).startsWith('navio-release-paths-'))
     await fs.rm(directory, { recursive: true, force: true })
   }
 })
