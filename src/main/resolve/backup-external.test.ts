@@ -1,7 +1,7 @@
-import { mkdtemp, mkdir, readFile, rm, writeFile, symlink } from 'fs/promises'
+import { mkdtemp, mkdir, readFile, rm, writeFile, symlink, lstat, realpath } from 'fs/promises'
 import os from 'os'
 import path from 'path'
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import AdmZip from 'adm-zip'
 import { parse, stringify } from '../utils/yaml'
 import {
@@ -10,6 +10,12 @@ import {
   rewriteExternalRestore,
   type BackupDocument
 } from './backup-external'
+
+vi.mock('fs/promises', async (original) => {
+  const actual = await original<typeof import('fs/promises')>()
+  return { ...actual, lstat: vi.fn(actual.lstat), realpath: vi.fn(actual.realpath) }
+})
+const actualFs = await vi.importActual<typeof import('fs/promises')>('fs/promises')
 
 function requireContent(entries: Map<string, Buffer>, name: string): Buffer {
   const content = entries.get(name)
@@ -32,6 +38,8 @@ describe('explicit external backup scope', () => {
     }
   ]
   beforeEach(async () => {
+    vi.mocked(lstat).mockImplementation(actualFs.lstat)
+    vi.mocked(realpath).mockImplementation(actualFs.realpath)
     directory = await mkdtemp(path.join(os.tmpdir(), 'navio-external-test-'))
     root = path.join(directory, 'data')
     outside = path.join(directory, 'rules.yaml')
@@ -39,6 +47,35 @@ describe('explicit external backup scope', () => {
     await writeFile(outside, 'payload: [example.com]')
     manager = new ExternalBackupFiles(root)
   })
+
+  async function shortNameFixture(): Promise<{
+    source: string
+    target: string
+    sourceDirectory: string
+    targetDirectory: string
+  }> {
+    const parent = await actualFs.realpath(directory)
+    const sourceDirectory = path.join(parent, 'RUNNER~1')
+    const targetDirectory = path.join(parent, 'Runner Account')
+    const source = path.join(sourceDirectory, 'rules.yaml')
+    const target = path.join(targetDirectory, 'rules.yaml')
+    await mkdir(sourceDirectory)
+    await writeFile(source, 'payload: [alias.example]')
+    vi.mocked(lstat).mockImplementation((file, options) => {
+      const requested = String(file)
+      const mapped =
+        requested === targetDirectory || requested.startsWith(targetDirectory + path.sep)
+          ? sourceDirectory + requested.slice(targetDirectory.length)
+          : file
+      return actualFs.lstat(mapped, options)
+    })
+    vi.mocked(realpath).mockImplementation((file) =>
+      String(file) === source || String(file) === target
+        ? Promise.resolve(target)
+        : actualFs.realpath(file)
+    )
+    return { source, target, sourceDirectory, targetDirectory }
+  }
   afterEach(async () => {
     if (
       path.dirname(directory) !== os.tmpdir() ||
@@ -174,5 +211,91 @@ describe('explicit external backup scope', () => {
     expect(
       (await manager.preview(docs(path.join(externalLink, 'secret.yaml')))).files[0].state
     ).toBe('blocked')
+  })
+
+  it('accepts verified Windows short names without approving their other spelling', async () => {
+    const { source, target } = await shortNameFixture()
+    const documents = docs(source)
+    const preview = await manager.preview(documents)
+    if (process.platform !== 'win32') {
+      expect(preview.files[0].state).toBe('blocked')
+      return
+    }
+    expect(preview.files[0]).toMatchObject({ path: source, state: 'available', approved: false })
+    await manager.approve(documents, preview.token, [preview.files[0].id])
+    expect((await manager.preview(docs(target))).files[0].approved).toBe(false)
+    const zip = new AdmZip()
+    await manager.append(zip, documents)
+    const manifest = JSON.parse(zip.readAsText('external-files.json'))
+    expect(manifest.omitted).toEqual([])
+    expect(manifest.files).toHaveLength(1)
+    expect(manifest.files[0].path).toBe(source)
+    expect(zip.readAsText(manifest.files[0].entry)).toBe('payload: [alias.example]')
+  })
+
+  it.each(['file', 'large-file', 'parent', 'unknown-file', 'unknown-parent', 'unknown-device'])(
+    'rejects a short-name expansion with mismatched or unknown %s identity',
+    async (kind) => {
+      const { source, target, sourceDirectory, targetDirectory } = await shortNameFixture()
+      const previous = vi.mocked(lstat).getMockImplementation()
+      if (!previous) throw new Error('Missing filesystem mock')
+      vi.mocked(lstat).mockImplementation(async (file, options) => {
+        const result = await previous(file, options)
+        if (options?.bigint) {
+          const current = String(file)
+          if (
+            (kind === 'file' && current === target) ||
+            (kind === 'parent' && current === targetDirectory)
+          )
+            result.ino += 1n
+          if (kind === 'large-file' && [source, target].includes(current))
+            result.ino = 9007199254740992n + (current === target ? 1n : 0n)
+          if (
+            (kind === 'unknown-file' && [source, target].includes(current)) ||
+            (kind === 'unknown-parent' && [sourceDirectory, targetDirectory].includes(current))
+          )
+            result.ino = 0n
+          if (kind === 'unknown-device') result.dev = 0n
+        }
+        return result
+      })
+      expect((await manager.preview(docs(source))).files[0].state).toBe('blocked')
+    }
+  )
+
+  it('rejects a link in the canonical path of a short-name expansion', async () => {
+    const { source, targetDirectory } = await shortNameFixture()
+    const previous = vi.mocked(lstat).getMockImplementation()
+    if (!previous) throw new Error('Missing filesystem mock')
+    vi.mocked(lstat).mockImplementation(async (file, options) => {
+      const result = await previous(file, options)
+      if (String(file) === targetDirectory) result.isSymbolicLink = () => true
+      return result
+    })
+    expect((await manager.preview(docs(source))).files[0].state).toBe('blocked')
+  })
+
+  it('rechecks alias identity against the open file after reading', async () => {
+    const { source, target } = await shortNameFixture()
+    const documents = docs(source)
+    const preview = await manager.preview(documents)
+    if (process.platform !== 'win32') {
+      expect(preview.files[0].state).toBe('blocked')
+      return
+    }
+    await manager.approve(documents, preview.token, [preview.files[0].id])
+    const previous = vi.mocked(lstat).getMockImplementation()
+    if (!previous) throw new Error('Missing filesystem mock')
+    let canonicalFileChecks = 0
+    vi.mocked(lstat).mockImplementation(async (file, options) => {
+      const result = await previous(file, options)
+      if (String(file) === target && options?.bigint && ++canonicalFileChecks > 1) result.ino += 1n
+      return result
+    })
+    const zip = new AdmZip()
+    await manager.append(zip, documents)
+    const manifest = JSON.parse(zip.readAsText('external-files.json'))
+    expect(manifest.files).toEqual([])
+    expect(manifest.omitted[0].reason).toContain('文件路径已变化')
   })
 })

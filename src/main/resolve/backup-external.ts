@@ -1,4 +1,5 @@
 import { createHash, randomUUID } from 'crypto'
+import type { BigIntStats } from 'fs'
 import { lstat, open, readFile, realpath } from 'fs/promises'
 import path from 'path'
 import type AdmZip from 'adm-zip'
@@ -50,6 +51,54 @@ export async function assertNoLinks(file: string): Promise<void> {
       throw error
     }
   }
+}
+
+async function assertResolvedFile(file: string, expected: BigIntStats): Promise<void> {
+  const resolved = await realpath(file)
+  await assertNoLinks(resolved)
+  const actual = await lstat(resolved, { bigint: true })
+  if (!actual.isFile() || actual.dev !== expected.dev || actual.ino !== expected.ino)
+    throw new Error('文件路径已变化')
+  if (normalized(resolved) === normalized(file)) return
+  if (process.platform !== 'win32') throw new Error('路径指向其他位置，请使用真实文件路径。')
+  if (expected.dev <= 0n || expected.ino <= 0n) throw new Error('无法核对文件路径')
+
+  const sourceRoot = path.parse(path.resolve(file)).root
+  const targetRoot = path.parse(resolved).root
+  const sourceParts = path.resolve(file).slice(sourceRoot.length).split(path.sep)
+  const targetParts = resolved.slice(targetRoot.length).split(path.sep)
+  if (
+    normalized(sourceRoot) !== normalized(targetRoot) ||
+    sourceParts.length !== targetParts.length
+  )
+    throw new Error('路径指向其他位置，请使用真实文件路径。')
+  let source = sourceRoot
+  let target = targetRoot
+  for (let i = 0; i < sourceParts.length; i++) {
+    source = path.join(source, sourceParts[i])
+    target = path.join(target, targetParts[i])
+    if (sourceParts[i].toLowerCase() === targetParts[i].toLowerCase()) continue
+    // A Windows 8.3 name can expand without following a link. Verify each expanded component.
+    if (
+      !/^[^ .]{1,6}~\d+(?:\.[^ .]{1,3})?$/.test(sourceParts[i]) ||
+      sourceParts[i].split('.')[0].length > 8
+    )
+      throw new Error('路径指向其他位置，请使用真实文件路径。')
+    const [shortName, longName] = await Promise.all([
+      lstat(source, { bigint: true }),
+      lstat(target, { bigint: true })
+    ])
+    if (
+      shortName.isSymbolicLink() ||
+      longName.isSymbolicLink() ||
+      shortName.dev <= 0n ||
+      shortName.ino <= 0n ||
+      shortName.dev !== longName.dev ||
+      shortName.ino !== longName.ino
+    )
+      throw new Error('文件路径已变化')
+  }
+  await assertNoLinks(file)
 }
 
 function configDocument(name: string): boolean {
@@ -175,12 +224,11 @@ export class ExternalBackupFiles {
           if (/^(?:\\\\|\/\/|~)/.test(reference.value))
             throw new Error('网络、设备和波浪线路径不自动访问，请改用本机普通文件的绝对路径。')
           await assertNoLinks(absolute)
-          const stat = await lstat(absolute)
+          const stat = await lstat(absolute, { bigint: true })
           if (!stat.isFile()) throw new Error('只备份明确引用的普通文件，不收集目录。')
           if (stat.size > MAX_FILE) throw new Error('单个外部文件超过 32 MB。')
-          if (normalized(await realpath(absolute)) !== key)
-            throw new Error('路径指向其他位置，请使用真实文件路径。')
-          item.bytes = stat.size
+          await assertResolvedFile(absolute, stat)
+          item.bytes = Number(stat.size)
         } catch (error) {
           item.state = (error as NodeJS.ErrnoException).code === 'ENOENT' ? 'missing' : 'blocked'
           item.reason = item.state === 'missing' ? '文件不存在' : (error as Error).message
@@ -265,20 +313,20 @@ export class ExternalBackupFiles {
       }
       try {
         await assertNoLinks(file.path)
-        const before = await lstat(file.path)
+        const before = await lstat(file.path, { bigint: true })
         const handle = await open(file.path, 'r')
         let content: Buffer
         try {
-          const opened = await handle.stat()
+          const opened = await handle.stat({ bigint: true })
           if (
             !opened.isFile() ||
             before.ino !== opened.ino ||
             before.dev !== opened.dev ||
             opened.size > MAX_FILE ||
-            total + opened.size > MAX_TOTAL
+            BigInt(total) + opened.size > BigInt(MAX_TOTAL)
           )
             throw new Error('文件已变化或超过 128 MB 外部文件总限额')
-          content = Buffer.alloc(opened.size)
+          content = Buffer.alloc(Number(opened.size))
           let offset = 0
           while (offset < content.length) {
             const { bytesRead } = await handle.read(
@@ -290,12 +338,15 @@ export class ExternalBackupFiles {
             if (!bytesRead) throw new Error('读取时文件已变化')
             offset += bytesRead
           }
-          const after = await handle.stat()
-          if (after.size !== opened.size || after.mtimeMs !== opened.mtimeMs)
+          const after = await handle.stat({ bigint: true })
+          if (
+            after.size !== opened.size ||
+            after.mtimeNs !== opened.mtimeNs ||
+            after.ctimeNs !== opened.ctimeNs
+          )
             throw new Error('读取时文件已变化')
           await assertNoLinks(file.path)
-          if (normalized(await realpath(file.path)) !== normalized(file.path))
-            throw new Error('文件路径已变化')
+          await assertResolvedFile(file.path, opened)
         } finally {
           await handle.close()
         }
