@@ -1,6 +1,6 @@
 import path from 'path'
 import { createHash } from 'crypto'
-import { dialog, nativeTheme, net, type IpcMainInvokeEvent } from 'electron'
+import { dialog, nativeTheme, type IpcMainInvokeEvent } from 'electron'
 import {
   officialThemeDefinition,
   type OfficialThemeSettings,
@@ -19,6 +19,7 @@ import { mainWindow } from '../window'
 import { getAppConfig, patchAppConfig } from '../config'
 import { themeAssets, type ThemeAsset } from '../../shared/theme-media'
 import { OfficialThemeStore } from './official-themes'
+import { chromiumThemeFetch } from './chromium-theme-fetch'
 import { applyTheme, writeTheme } from './theme'
 import { dexAccountRequest, dexServerUrl, setDexServerUrl } from './dex-account'
 import {
@@ -35,7 +36,7 @@ let trial: { theme: DexTheme; settings: Record<string, OfficialThemeSettings> } 
 function officialService(): OfficialThemeStore {
   return (officialLibrary ??= new OfficialThemeStore(
     path.join(dataDir(), 'dex-library', 'official'),
-    (input, init) => net.fetch(input instanceof URL ? input.href : input, init)
+    chromiumThemeFetch
   ))
 }
 function trialState(): ThemeTrialState | null {

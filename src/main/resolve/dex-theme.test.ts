@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
+import { EventEmitter } from 'node:events'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 import type { IpcMainInvokeEvent } from 'electron'
 import { BUILTIN_THEMES } from '../dex-legacy/themes.cjs'
@@ -23,13 +24,13 @@ const mocks = vi.hoisted(() => {
     writeTheme: vi.fn(async () => {}),
     applyTheme: vi.fn(async () => {}),
     accountRequest: vi.fn(),
-    chromiumFetch: vi.fn()
+    chromiumRequest: vi.fn()
   }
 })
 vi.mock('electron', () => ({
   dialog: {},
   nativeTheme: { shouldUseDarkColors: true },
-  net: { fetch: mocks.chromiumFetch }
+  net: { request: mocks.chromiumRequest }
 }))
 vi.mock('../utils/dirs', () => ({ dataDir: () => mocks.directory }))
 vi.mock('../window', () => ({
@@ -62,34 +63,91 @@ afterEach(async () => {
 const event = (): IpcMainInvokeEvent =>
   ({ sender: mocks.webContents, senderFrame: mocks.frame }) as unknown as IpcMainInvokeEvent
 
+function fakeChromiumRequest({
+  bytes,
+  redirect
+}: {
+  bytes?: Buffer
+  redirect?: string
+}): EventEmitter {
+  const request = Object.assign(new EventEmitter(), {
+    setHeader: vi.fn(),
+    abort: (): void => {
+      request.emit('abort')
+      request.emit('close')
+    },
+    end: (): void => {
+      queueMicrotask(() => {
+        if (redirect) {
+          request.emit('redirect', 302, 'GET', redirect, {})
+          return
+        }
+        const response = Object.assign(new EventEmitter(), {
+          statusCode: 200,
+          headers: { 'content-type': ['application/json'] }
+        })
+        request.emit('response', response)
+        response.emit('data', bytes)
+        response.emit('end')
+        request.emit('close')
+      })
+    }
+  })
+  return request
+}
+
 describe('restricted D.E.X theme IPC adapter', () => {
   it('downloads official themes through Chromium and reuses the verified cache without either network transport', async () => {
     const bytes = await readFile(path.resolve('scripts/theme-packages/Navio-Theme-aurora-1.json'))
     const directFetch = vi.fn().mockRejectedValue(new Error('Direct network unavailable'))
     vi.stubGlobal('fetch', directFetch)
-    mocks.chromiumFetch.mockResolvedValueOnce(new Response(bytes))
+    mocks.chromiumRequest.mockImplementationOnce(() =>
+      fakeChromiumRequest({
+        redirect: 'https://release-assets.githubusercontent.com/validated-theme'
+      })
+    )
+    mocks.chromiumRequest.mockImplementationOnce(() => fakeChromiumRequest({ bytes }))
     const { dexThemes } = await import('./dex-theme')
     await dexThemes(event(), 'installOfficial', { id: 'navio-aurora' })
-    expect(mocks.chromiumFetch).toHaveBeenCalledWith(
-      'https://github.com/poniard-li/Navio/releases/download/v1.0.0-beta.7/Navio-Theme-aurora-1.json',
+    expect(mocks.chromiumRequest).toHaveBeenNthCalledWith(
+      1,
       expect.objectContaining({
+        url: 'https://github.com/poniard-li/Navio/releases/download/v1.0.0-beta.7/Navio-Theme-aurora-1.json',
         redirect: 'manual',
         credentials: 'omit',
-        signal: expect.any(AbortSignal)
+        useSessionCookies: false
+      })
+    )
+    expect(mocks.chromiumRequest).toHaveBeenNthCalledWith(
+      2,
+      expect.objectContaining({
+        url: 'https://release-assets.githubusercontent.com/validated-theme'
       })
     )
     expect(
       await readFile(path.join(mocks.directory, 'dex-library/official/navio-aurora.json'))
     ).toEqual(bytes)
-    mocks.chromiumFetch.mockRejectedValue(new Error('Offline'))
+    mocks.chromiumRequest.mockImplementation(() => {
+      throw new Error('Offline')
+    })
     await dexThemes(event(), 'installOfficial', { id: 'navio-aurora' })
     await dexThemes(event(), 'trial', { id: 'navio-aurora', appearance: 'light' })
     expect(await dexThemes(event(), 'activeBackground')).toMatchObject({
       id: 'navio-aurora',
       appearance: 'light'
     })
-    expect(mocks.chromiumFetch).toHaveBeenCalledTimes(1)
+    expect(mocks.chromiumRequest).toHaveBeenCalledTimes(2)
     expect(directFetch).not.toHaveBeenCalled()
+  })
+  it('does not follow a Chromium redirect outside the official release hosts', async () => {
+    mocks.chromiumRequest.mockImplementationOnce(() =>
+      fakeChromiumRequest({ redirect: 'http://127.0.0.1/private' })
+    )
+    const { dexThemes } = await import('./dex-theme')
+    await expect(dexThemes(event(), 'installOfficial', { id: 'navio-aurora' })).rejects.toThrow(
+      '不受信任'
+    )
+    expect(mocks.chromiumRequest).toHaveBeenCalledTimes(1)
   })
   it('keeps cross-page trials temporary and restores settings without changing the persisted theme', async () => {
     const { dexThemes } = await import('./dex-theme')
