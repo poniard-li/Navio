@@ -11,6 +11,7 @@ import { useState } from 'react'
 import { version } from '@renderer/utils/init'
 import { IoIosHelpCircle } from 'react-icons/io'
 import { useTranslation } from 'react-i18next'
+import { formatProductVersion } from '../../../../shared/product'
 import UpdaterModal from '../updater/updater-modal'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
@@ -129,7 +130,7 @@ const Actions: React.FC = () => {
           </Button>
         </SettingItem>
         <SettingItem title={t('actions.version.title')}>
-          <div>v{version}</div>
+          <div>{formatProductVersion(version)}</div>
         </SettingItem>
       </SettingCard>
     </>

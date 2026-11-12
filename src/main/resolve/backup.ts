@@ -1,7 +1,7 @@
 import https from 'https'
 import os from 'os'
 import { existsSync } from 'fs'
-import { readFile, mkdir, writeFile } from 'fs/promises'
+import { readFile, mkdir, writeFile, readdir, lstat } from 'fs/promises'
 import path from 'path'
 import dayjs from 'dayjs'
 import AdmZip from 'adm-zip'
@@ -23,8 +23,17 @@ import {
   themesDir
 } from '../utils/dirs'
 import { getAppConfig } from '../config'
+import { atomicWriteFile } from '../utils/safeFile'
+import type { BackupExternalPreview } from '../../shared/backup-external'
 import { readBackupPassword } from './backup-password'
 import { encryptBackup, decryptBackup } from './backup-crypto'
+import {
+  ExternalBackupFiles,
+  assertNoLinks,
+  insideDirectory,
+  rewriteExternalRestore,
+  type BackupDocument
+} from './backup-external'
 
 let backupCronJob: Cron | null = null
 
@@ -91,8 +100,57 @@ async function getWebDAVClient(): Promise<WebDAVContext> {
   return { client, webdavDir, webdavMaxBackups }
 }
 
-async function createBackupZip(): Promise<AdmZip> {
+const externalManagers = new Map<string, ExternalBackupFiles>()
+function externalFiles(): ExternalBackupFiles {
+  const root = dataDir()
+  let manager = externalManagers.get(root)
+  if (!manager) {
+    manager = new ExternalBackupFiles(root)
+    externalManagers.set(root, manager)
+  }
+  return manager
+}
+
+async function backupDocuments(zip: AdmZip): Promise<BackupDocument[]> {
+  const { diffWorkDir } = await getAppConfig()
+  let current = 'default'
+  try {
+    current =
+      parse<{ current?: string }>(zip.getEntry('profile.yaml')?.getData().toString('utf8') || '')
+        .current || current
+  } catch {
+    /* Individual source profiles still have their own base. */
+  }
+  return zip
+    .getEntries()
+    .filter((entry) => !entry.isDirectory)
+    .map((entry) => {
+      const name = entry.entryName
+      const profile = name.match(/^(?:profiles|profile-local)\/([\w-]+)\./)?.[1]
+      const base = name.startsWith('work/')
+        ? path.dirname(path.join(dataDir(), name))
+        : path.join(dataDir(), 'work', ...(diffWorkDir ? [profile || current] : []))
+      return { name, content: entry.getData(), base }
+    })
+}
+
+async function createBackupZip(includeExternal = true): Promise<AdmZip> {
   const zip = new AdmZip()
+  const warnings: string[] = []
+  async function add(source: string, name: string): Promise<void> {
+    try {
+      await assertNoLinks(source)
+      const info = await lstat(source)
+      if (info.isDirectory()) {
+        for (const child of await readdir(source))
+          await add(path.join(source, child), `${name}/${child}`)
+      } else if (info.isFile()) zip.addFile(name.replace(/\\/g, '/'), await readFile(source))
+      else warnings.push(`${name} 不是普通文件，未备份。`)
+    } catch (error) {
+      if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+        warnings.push(`${name}：${(error as Error).message}`)
+    }
+  }
 
   const files = [controledMihomoConfigPath(), profileConfigPath(), overrideConfigPath()]
   const settings = {
@@ -110,7 +168,7 @@ async function createBackupZip(): Promise<AdmZip> {
   zip.addFile(path.basename(appConfigPath()), Buffer.from(stringify(settings)))
   for (const name of ['simple-config.yaml', 'theme-settings.json']) {
     const file = path.join(dataDir(), name)
-    if (existsSync(file)) zip.addLocalFile(file)
+    if (existsSync(file)) await add(file, name)
   }
 
   const folders = [
@@ -121,22 +179,39 @@ async function createBackupZip(): Promise<AdmZip> {
     { path: subStoreDir(), name: 'substore' },
     { path: path.join(dataDir(), 'dex-library'), name: 'dex-library' },
     { path: path.join(dataDir(), 'profile-local'), name: 'profile-local' },
-    { path: path.join(dataDir(), 'work'), name: 'work' }
+    { path: path.join(dataDir(), 'work'), name: 'work' },
+    { path: path.join(dataDir(), 'restored-resources'), name: 'restored-resources' }
   ]
 
   for (const file of files) {
     if (existsSync(file)) {
-      zip.addLocalFile(file)
+      await add(file, path.basename(file))
     }
   }
 
   for (const { path, name } of folders) {
     if (existsSync(path)) {
-      zip.addLocalFolder(path, name)
+      await add(path, name)
     }
   }
 
+  if (includeExternal) await externalFiles().append(zip, await backupDocuments(zip), warnings)
+  else if (warnings.length)
+    zip.addFile('external-scan-warnings.json', Buffer.from(JSON.stringify(warnings)))
   return zip
+}
+
+export async function previewBackupExternalFiles(): Promise<BackupExternalPreview> {
+  const zip = await createBackupZip(false)
+  const report = await externalFiles().preview(await backupDocuments(zip))
+  const warnings = zip.getEntry('external-scan-warnings.json')
+  if (warnings) report.warnings.push(...JSON.parse(warnings.getData().toString('utf8')))
+  return report
+}
+
+export async function approveBackupExternalFiles(token: string, ids: string[]): Promise<void> {
+  const zip = await createBackupZip(false)
+  await externalFiles().approve(await backupDocuments(zip), token, ids)
 }
 
 async function backupPayload(): Promise<{ data: Buffer; extension: string }> {
@@ -161,7 +236,8 @@ async function restorePayload(data: Buffer, password?: string): Promise<void> {
     'substore',
     'dex-library',
     'work',
-    'profile-local'
+    'profile-local',
+    'restored-resources'
   ])
   const files = new Set([
     'config.yaml',
@@ -169,57 +245,88 @@ async function restorePayload(data: Buffer, password?: string): Promise<void> {
     'profile.yaml',
     'override.yaml',
     'simple-config.yaml',
-    'theme-settings.json'
+    'theme-settings.json',
+    'external-files.json'
   ])
   let total = 0
+  const seen = new Set<string>()
   for (const entry of entries) {
-    const name = entry.entryName.replace(/\\/g, '/')
+    const name = entry.entryName
     const parts = name.split('/')
     if (
       name.startsWith('/') ||
-      parts.some((p) => p === '..' || p.includes(':')) ||
+      name.includes('\\') ||
+      parts.some(
+        (p, index) =>
+          (!p && (!entry.isDirectory || index !== parts.length - 1)) ||
+          p === '..' ||
+          p === '.' ||
+          p.includes(':') ||
+          /[. ]$/.test(p) ||
+          /^(?:con|prn|aux|nul|com[1-9]|lpt[1-9])(?:\.|$)/i.test(p)
+      ) ||
+      ((entry.header.attr >>> 16) & 0o170000) === 0o120000 ||
       (!roots.has(parts[0]) && !files.has(name))
     )
       throw new Error(`不支持的备份路径：${name}`)
+    const key = process.platform === 'win32' ? name.toLowerCase() : name
+    if (seen.has(key)) throw new Error(`备份中存在重复路径：${name}`)
+    seen.add(key)
     total += entry.header.size
     if (total > 512 * 1024 * 1024) throw new Error('解压后的备份超过 512 MB。')
   }
   // Validate every entry before writing; account and backup vaults are never imported.
-  const prepared = entries
-    .filter((e) => !e.isDirectory)
-    .map((entry) => {
-      let content = entry.getData()
-      if (entry.entryName === 'config.yaml') {
-        const value = parse(content.toString('utf8')) as IAppConfig
-        if (!value || typeof value !== 'object' || Array.isArray(value))
-          throw new Error('备份设置无效')
-        value.autoConnect = false
-        value.webdavEnabled = false
-        value.gistSyncEnabled = false
-        value.sysProxy = { ...value.sysProxy, enable: false }
-        for (const key of [
-          'githubToken',
-          'webdavPassword',
-          'encryptedPassword',
-          'gistAgeSecretKey'
-        ] as const)
-          delete value[key]
-        content = Buffer.from(stringify(value))
-      }
-      if (entry.entryName === 'mihomo.yaml') {
-        const value = parse(content.toString('utf8')) as IMihomoConfig
-        if (value.tun) value.tun.enable = false
-        content = Buffer.from(stringify(value))
-      }
-      return { name: entry.entryName, content }
-    })
+  const contents = new Map(
+    entries.filter((entry) => !entry.isDirectory).map((entry) => [entry.entryName, entry.getData()])
+  )
+  const missing = rewriteExternalRestore(contents, dataDir())
+  const prepared = [...contents].map(([name, original]) => {
+    let content = original
+    if (name === 'config.yaml') {
+      const value = parse(content.toString('utf8')) as IAppConfig
+      if (!value || typeof value !== 'object' || Array.isArray(value))
+        throw new Error('备份设置无效')
+      value.autoConnect = false
+      value.webdavEnabled = false
+      value.gistSyncEnabled = false
+      value.sysProxy = { ...value.sysProxy, enable: false }
+      for (const key of [
+        'githubToken',
+        'webdavPassword',
+        'encryptedPassword',
+        'gistAgeSecretKey'
+      ] as const)
+        delete value[key]
+      content = Buffer.from(stringify(value))
+    }
+    if (name === 'mihomo.yaml') {
+      const value = parse(content.toString('utf8')) as IMihomoConfig
+      if (value.tun) value.tun.enable = false
+      content = Buffer.from(stringify(value))
+    }
+    return { name, content }
+  })
+  // Reject every linked destination before replacing any configuration.
+  for (const entry of prepared) {
+    const destination = path.resolve(dataDir(), entry.name)
+    if (!insideDirectory(dataDir(), destination)) throw new Error('无效恢复路径')
+    await assertNoLinks(destination)
+  }
   for (const entry of prepared) {
     const destination = path.resolve(dataDir(), entry.name)
     const rel = path.relative(dataDir(), destination)
     if (rel.startsWith('..') || path.isAbsolute(rel)) throw new Error('无效恢复路径')
     await mkdir(path.dirname(destination), { recursive: true })
-    await writeFile(destination, entry.content)
+    await assertNoLinks(destination)
+    await atomicWriteFile(destination, entry.content)
   }
+  if (missing.length)
+    await dialog.showMessageBox({
+      type: 'warning',
+      title: '备份已恢复，部分外部文件未包含',
+      message: `共有 ${missing.length} 项需要检查。相关配置可能需要手动修正路径或补齐文件。`,
+      detail: missing.slice(0, 50).join('\n')
+    })
 }
 
 export async function webdavBackup(): Promise<boolean> {

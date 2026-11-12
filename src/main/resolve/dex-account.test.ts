@@ -1,6 +1,7 @@
 import { mkdtemp, readFile, writeFile, rm, access } from 'fs/promises'
 import { basename, dirname, join, resolve } from 'path'
 import { tmpdir } from 'os'
+import { createHash } from 'crypto'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
 const mocks = vi.hoisted(() => ({
@@ -19,7 +20,10 @@ vi.mock('electron', () => ({
   },
   shell: { openExternal: mocks.openExternal }
 }))
-vi.mock('../utils/dirs', () => ({ dataDir: () => mocks.directory }))
+vi.mock('../utils/dirs', () => ({
+  dataDir: () => mocks.directory,
+  dexSharedAccountDir: () => join(mocks.directory, 'shared')
+}))
 
 const origin = 'https://navio.mydex.top'
 const user = { id: 'account-test-user', username: 'navio_test', displayName: '账号测试' }
@@ -40,6 +44,8 @@ const response = (data: unknown, status = 200): Response =>
   })
 let account: typeof import('./dex-account')
 const vaultFile = (): string => join(mocks.directory, 'dex-account.vault')
+const sharedFile = (): string =>
+  join(mocks.directory, 'shared', createHash('sha256').update(origin).digest('hex') + '.vault')
 
 async function login(): Promise<void> {
   mocks.fetch.mockResolvedValueOnce(response(device))
@@ -53,6 +59,113 @@ async function login(): Promise<void> {
 async function assertNoVault(): Promise<void> {
   await expect(access(vaultFile())).rejects.toMatchObject({ code: 'ENOENT' })
 }
+
+describe('D.E.X explicit same-user SSO and account recovery', () => {
+  const ssoToken = 'A'.repeat(43)
+  const ssoExpiresAt = '2099-01-01T00:00:00.000Z'
+  const signInWithShared = async (): Promise<unknown> => {
+    mocks.fetch.mockResolvedValueOnce(response({ accessToken, user, ssoToken, ssoExpiresAt }))
+    return account.dexAccountAction('login', {
+      identifier: user.username,
+      password: 'test-password'
+    })
+  }
+  it('encrypts shared credentials without returning them to the renderer or auto-signing-in', async () => {
+    const result = await signInWithShared()
+    expect(result).toEqual({ status: 'online', serverUrl: origin, user })
+    const raw = await readFile(sharedFile(), 'utf8')
+    expect(raw).not.toContain(ssoToken)
+    expect(raw).not.toContain(accessToken)
+    const saved = JSON.parse(mocks.decrypt(Buffer.from(raw)))
+    expect(saved).toMatchObject({ serverUrl: origin, ssoToken, sourceAppId: 'navio', user })
+    expect(saved.accessToken).toBeUndefined()
+    await rm(vaultFile())
+    mocks.fetch.mockClear()
+    expect(await account.getDexAccount()).toEqual({ status: 'signed-out', serverUrl: origin })
+    expect(mocks.fetch).not.toHaveBeenCalled()
+    mocks.fetch.mockResolvedValueOnce(response({ user, sourceAppId: 'mystery' }))
+    expect(await account.dexAccountAction('sso-info')).toEqual({ user, sourceAppId: 'mystery' })
+    await assertNoVault()
+  })
+  it('requires confirmed identity before exchanging an internal SSO token for Navio', async () => {
+    await signInWithShared()
+    await rm(vaultFile())
+    mocks.fetch.mockClear()
+    await expect(
+      account.dexAccountAction('sso-continue', { expectedUserId: user.id })
+    ).rejects.toThrow('核对')
+    await expect(
+      account.dexAccountAction('sso-continue', { confirmed: true, expectedUserId: 'other' })
+    ).rejects.toThrow('核对')
+    expect(mocks.fetch).not.toHaveBeenCalled()
+    mocks.fetch.mockResolvedValueOnce(response({ accessToken: 'new-navio-session', user }))
+    expect(
+      await account.dexAccountAction('sso-continue', {
+        confirmed: true,
+        expectedUserId: user.id,
+        ssoToken: 'renderer-injected',
+        appId: 'mystery'
+      })
+    ).toEqual({ status: 'online', serverUrl: origin, user })
+    const [url, options] = mocks.fetch.mock.calls[0]
+    expect(url).toBe(origin + '/api/v1/desktop/sso/continue')
+    expect(JSON.parse(options.body)).toMatchObject({ ssoToken, appId: 'navio', confirmed: true })
+    expect(options.headers.get('Authorization')).toBeNull()
+  })
+  it('partitions shared credentials by service and does not erase a newer other-product login', async () => {
+    await signInWithShared()
+    const saved = JSON.parse(mocks.decrypt(await readFile(sharedFile())))
+    await writeFile(
+      sharedFile(),
+      encrypted(JSON.stringify({ ...saved, ssoToken: 'B'.repeat(43), sourceAppId: 'mystery' }))
+    )
+    mocks.fetch.mockResolvedValueOnce(response({ ok: true }))
+    await account.logoutDexAccount()
+    expect(JSON.parse(mocks.decrypt(await readFile(sharedFile()))).sourceAppId).toBe('mystery')
+    await account.setDexServerUrl('http://localhost:3210')
+    mocks.fetch.mockClear()
+    expect(await account.dexAccountAction('sso-info')).toBeNull()
+    expect(mocks.fetch).not.toHaveBeenCalled()
+  })
+  it('clears its own shared credential on logout and supports local-only forgetting', async () => {
+    await signInWithShared()
+    mocks.fetch.mockResolvedValueOnce(response({ ok: true }))
+    await account.logoutDexAccount()
+    await expect(access(sharedFile())).rejects.toMatchObject({ code: 'ENOENT' })
+    await signInWithShared()
+    mocks.fetch.mockClear()
+    expect(await account.dexAccountAction('sso-forget')).toEqual({ ok: true })
+    expect(mocks.fetch).not.toHaveBeenCalled()
+    await expect(access(sharedFile())).rejects.toMatchObject({ code: 'ENOENT' })
+    await expect(access(vaultFile())).resolves.toBeUndefined()
+  })
+  it('uses unauthenticated desktop recovery routes and never creates a session on completion', async () => {
+    for (const action of ['recovery-info', 'recovery-request', 'recovery-complete'] as const) {
+      mocks.fetch.mockResolvedValueOnce(response({ ok: true }))
+      await account.dexAccountAction(action, {
+        recoveryToken: 'R'.repeat(43),
+        contact: 'new@example.com',
+        code: '123456',
+        newPassword: 'new-password'
+      })
+      const [url, options] = mocks.fetch.mock.calls[mocks.fetch.mock.calls.length - 1]
+      expect(url).toBe(`${origin}/api/v1/desktop/recovery/${action.slice('recovery-'.length)}`)
+      expect(options.headers.get('Authorization')).toBeNull()
+      expect(options.headers.get('x-dex-client')).toBe('desktop')
+    }
+    await assertNoVault()
+  })
+  it('sends account proof when explicitly unlinking an old product account', async () => {
+    await login()
+    mocks.fetch.mockClear()
+    mocks.fetch.mockResolvedValueOnce(response({ ok: true }))
+    await account.dexAccountAction('mystery-unlink', { currentPassword: 'local-proof' })
+    const [url, options] = mocks.fetch.mock.calls[0]
+    expect(url).toBe(origin + '/api/v1/account/mystery')
+    expect(options.method).toBe('DELETE')
+    expect(JSON.parse(options.body)).toMatchObject({ currentPassword: 'local-proof' })
+  })
+})
 
 beforeEach(async () => {
   vi.resetModules()

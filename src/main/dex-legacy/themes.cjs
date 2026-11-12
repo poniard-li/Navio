@@ -1,4 +1,5 @@
 'use strict'
+const { validateBackground } = require('./theme-assets.cjs')
 
 const COLOR_KEYS = Object.freeze([
   'bg',
@@ -97,19 +98,11 @@ function validateTheme(input) {
     result.fontFamily = input.fontFamily
   }
   if (input.background !== undefined) {
-    const bg = input.background
-    if (
-      !bg ||
-      !['solid', 'gradient'].includes(bg.type) ||
-      Object.keys(bg).some((key) => !['type', 'colors', 'angle'].includes(key)) ||
-      !Array.isArray(bg.colors) ||
-      bg.colors.length < (bg.type === 'solid' ? 1 : 2) ||
-      bg.colors.length > (bg.type === 'solid' ? 1 : 4) ||
-      bg.colors.some((c) => typeof c !== 'string' || !/^#[0-9a-f]{6}$/i.test(c)) ||
-      (bg.angle !== undefined && (!Number.isFinite(bg.angle) || bg.angle < 0 || bg.angle > 360))
-    )
-      throw new ThemeValidationError('背景参数无效')
-    result.background = structuredClone(bg)
+    try {
+      result.background = validateBackground(input.background)
+    } catch (error) {
+      throw new ThemeValidationError(error.message)
+    }
   }
   if (Buffer.byteLength(JSON.stringify(result), 'utf8') > MAX_THEME_BYTES)
     throw new ThemeValidationError('主题文件过大')
@@ -121,7 +114,7 @@ const definitions = [
     id: 'glacier',
     name: '冰川白',
     author: 'D.E.X Studio',
-    description: '通透的白色与清晰的蓝，留出专注的空间。',
+    description: '白色背景，搭配蓝色按钮和深灰文字。',
     appearance: 'light',
     radius: 20,
     colors: {
@@ -140,7 +133,7 @@ const definitions = [
     id: 'graphite',
     name: '石墨黑',
     author: 'D.E.X Studio',
-    description: '柔和的石墨灰，配以明亮而沉静的蓝。',
+    description: '石墨灰背景，搭配蓝色按钮和白色文字。',
     appearance: 'dark',
     radius: 20,
     colors: {
@@ -159,7 +152,7 @@ const definitions = [
     id: 'obsidian',
     name: '曜石 · Obsidian',
     author: 'D.E.X Studio',
-    description: '深曜黑与暖琥珀，安静而有力量。',
+    description: '深黑背景，搭配琥珀色按钮和浅色文字。',
     appearance: 'dark',
     radius: 16,
     colors: {
@@ -178,7 +171,7 @@ const definitions = [
     id: 'porcelain',
     name: '瓷白 · Porcelain',
     author: 'D.E.X Studio',
-    description: '温润的瓷白，搭配明亮而克制的橙。',
+    description: '米白背景，搭配橙色按钮和深色文字。',
     appearance: 'light',
     radius: 16,
     colors: {
@@ -197,7 +190,7 @@ const definitions = [
     id: 'midnight',
     name: '深海 · Midnight',
     author: 'D.E.X Studio',
-    description: '午夜蓝、冷青与清晰的层次。',
+    description: '深蓝背景，搭配青色按钮和浅蓝文字。',
     appearance: 'dark',
     radius: 18,
     colors: {
@@ -216,7 +209,7 @@ const definitions = [
     id: 'rose',
     name: '暮玫 · Rose',
     author: 'D.E.X Studio',
-    description: '暖灰色的背景，留下柔和的玫瑰余韵。',
+    description: '深暖灰背景，搭配玫瑰色按钮和浅粉文字。',
     appearance: 'dark',
     radius: 20,
     colors: {

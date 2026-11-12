@@ -49,24 +49,8 @@ const TunSwitcher: React.FC<Props> = (props) => {
 
         if (!hasPermissions) {
           if (window.electron.process.platform === 'win32') {
-            const confirmed = await window.electron.ipcRenderer.invoke('showTunPermissionDialog')
-            if (confirmed) {
-              try {
-                const notification = new Notification(t('tun.permissions.restarting'))
-                await window.electron.ipcRenderer.invoke('restartAsAdmin')
-                notification.close()
-                return
-              } catch (error) {
-                console.error('Failed to restart as admin:', error)
-                await window.electron.ipcRenderer.invoke(
-                  'showErrorDialog',
-                  t('tun.permissions.failed'),
-                  String(error)
-                )
-                updateTrayIconImmediate(sysProxyEnabled, false)
-                return
-              }
-            } else {
+            const granted = await window.electron.ipcRenderer.invoke('ensureWindowsTunAccess')
+            if (!granted) {
               updateTrayIconImmediate(sysProxyEnabled, false)
               return
             }
@@ -88,6 +72,13 @@ const TunSwitcher: React.FC<Props> = (props) => {
         }
       } catch (error) {
         console.warn('Permission check failed:', error)
+        await window.electron.ipcRenderer.invoke(
+          'showErrorDialog',
+          t('tun.permissions.failed'),
+          String(error)
+        )
+        updateTrayIconImmediate(sysProxyEnabled, false)
+        return
       }
 
       await patchControledMihomoConfig({ tun: { enable }, dns: { enable: true } })

@@ -14,19 +14,23 @@ import {
 import { dexAccountAction } from '@renderer/utils/ipc'
 import type { DexTheme } from '../../../../shared/dex-theme'
 import BaseConfirmModal from '../base/base-confirm-modal'
+import { ThemeCanvas } from './theme-background'
 
 interface Publication {
   id: string
   theme: DexTheme
   status: string
+  moderationReason?: string
   favoriteCount?: number
 }
 export default function ThemeCommunity({
   onClose,
-  onApplied
+  onApplied,
+  onEdit
 }: {
   onClose: () => void
   onApplied: () => void
+  onEdit: (theme: DexTheme) => void
 }): React.JSX.Element {
   const [scope, setScope] = useState('themes')
   const [query, setQuery] = useState('')
@@ -41,6 +45,7 @@ export default function ThemeCommunity({
   const [report, setReport] = useState<Publication>()
   const [reason, setReason] = useState('')
   const [removing, setRemoving] = useState<Publication>()
+  const [mediaPreview, setMediaPreview] = useState<string>()
   const sequence = useRef(0)
   const load = useCallback(async (): Promise<void> => {
     const seq = ++sequence.current
@@ -152,9 +157,11 @@ export default function ThemeCommunity({
                         {item.theme.author} ·{' '}
                         {item.status === 'removed'
                           ? '已被管理员下架'
-                          : item.theme.appearance === 'dark'
-                            ? '深色主题'
-                            : '浅色主题'}
+                          : item.status === 'pending_review'
+                            ? '等待管理员复核'
+                            : item.theme.appearance === 'dark'
+                              ? '深色主题'
+                              : '浅色主题'}
                       </p>
                     </div>
                     <span
@@ -166,6 +173,84 @@ export default function ThemeCommunity({
                   <p className="text-sm text-default-500 my-3 break-words">
                     {item.theme.description || '作者尚未填写说明。'}
                   </p>
+                  {item.theme.background && 'asset' in item.theme.background && (
+                    <>
+                      {mediaPreview === item.id ? (
+                        <div className="relative h-40 mb-3 overflow-hidden rounded-lg">
+                          <ThemeCanvas theme={item.theme} playback />
+                        </div>
+                      ) : (
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          className="mb-3"
+                          isDisabled={busy}
+                          onPress={() =>
+                            void action(async () => {
+                              const value = await window.electron.ipcRenderer.invoke(
+                                'dexThemes',
+                                'loadMedia',
+                                { theme: item.theme }
+                              )
+                              if (value && typeof value === 'object' && 'invokeError' in value)
+                                throw new Error(String(value.invokeError))
+                              setMediaPreview(item.id)
+                            })
+                          }
+                        >
+                          下载并预览媒体背景
+                        </Button>
+                      )}
+                    </>
+                  )}
+                  {scope === 'my-themes' && item.status !== 'published' && (
+                    <div className="rounded-lg bg-warning-50 p-3 mb-3 text-sm">
+                      <p>下架原因：{item.moderationReason || '请联系管理员查看处理原因。'}</p>
+                      {item.status === 'pending_review' ? (
+                        <p className="mt-2">修改稿已提交，复核通过后恢复公开。</p>
+                      ) : (
+                        <div className="flex gap-2 mt-2">
+                          <Button
+                            size="sm"
+                            isDisabled={busy}
+                            onPress={() =>
+                              void action(async () => {
+                                const value = await window.electron.ipcRenderer.invoke(
+                                  'dexThemes',
+                                  'editPublication',
+                                  { id: item.id }
+                                )
+                                if (value && typeof value === 'object' && 'invokeError' in value)
+                                  throw new Error(String(value.invokeError))
+                                onEdit(value as DexTheme)
+                              })
+                            }
+                          >
+                            编辑修改稿
+                          </Button>
+                          <Button
+                            size="sm"
+                            color="primary"
+                            isDisabled={busy}
+                            onPress={() =>
+                              void action(async () => {
+                                const value = await window.electron.ipcRenderer.invoke(
+                                  'dexThemes',
+                                  'reviewPublication',
+                                  { id: item.id }
+                                )
+                                if (value && typeof value === 'object' && 'invokeError' in value)
+                                  throw new Error(String(value.invokeError))
+                                setNotice('修改稿已提交，等待管理员复核。')
+                              })
+                            }
+                          >
+                            提交已保存的修改稿
+                          </Button>
+                        </div>
+                      )}
+                    </div>
+                  )}
                   <div className="flex flex-wrap gap-2">
                     <Button
                       size="sm"

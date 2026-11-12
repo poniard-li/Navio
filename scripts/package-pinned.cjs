@@ -110,6 +110,13 @@ const hash = (p) => crypto.createHash('sha256').update(fss.readFileSync(p)).dige
       filter: (source) => dir !== 'files' || !excludedData.has(path.basename(source))
     })
   }
+  const { buildWindowsService } = require('./build-windows-service.cjs')
+  await buildWindowsService()
+  await fs.cp(
+    path.join(root, 'extra/windows-service'),
+    path.join(output, 'resources/windows-service'),
+    { recursive: true }
+  )
   // Refuse stale files when reusing an output directory; never publish archived Geo snapshots.
   for (const file of excludedData) {
     const target = path.join(output, 'resources/files', file)

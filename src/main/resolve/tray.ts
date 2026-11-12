@@ -42,7 +42,7 @@ import {
   quitWithoutCore,
   checkMihomoCorePermissions,
   requestTunPermissions,
-  restartAsAdmin
+  ensureWindowsTunAccess
 } from '../core/manager'
 import { trayLogger } from '../utils/logger'
 import { writeClipboardText } from '../utils/clipboard'
@@ -284,8 +284,7 @@ export const buildContextMenu = async (): Promise<Menu> => {
               if (!hasPermissions) {
                 if (process.platform === 'win32') {
                   try {
-                    await restartAsAdmin()
-                    return
+                    if (!(await ensureWindowsTunAccess())) return
                   } catch (error) {
                     await trayLogger.error('Failed to restart as admin from tray', error)
                     item.checked = false

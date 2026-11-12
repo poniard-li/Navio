@@ -10,6 +10,7 @@ import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
 import BaseConfirmModal from '../base/base-confirm-modal'
 import WebdavRestoreModal from './webdav-restore-modal'
+import BackupExternalModal from './backup-external-modal'
 
 const WebdavConfig: React.FC = () => {
   const { t } = useTranslation()
@@ -28,6 +29,7 @@ const WebdavConfig: React.FC = () => {
   const [filenames, setFilenames] = useState<string[]>([])
   const [restoreOpen, setRestoreOpen] = useState(false)
   const [enableConfirm, setEnableConfirm] = useState(false)
+  const [externalScope, setExternalScope] = useState(false)
 
   const [webdav, setWebdav] = useState({
     webdavUrl,
@@ -94,6 +96,16 @@ const WebdavConfig: React.FC = () => {
   }
   return (
     <>
+      {externalScope && (
+        <BackupExternalModal
+          onClose={() => setExternalScope(false)}
+          actionLabel="保存选择并备份"
+          onApproved={async () => {
+            setExternalScope(false)
+            await handleBackup()
+          }}
+        />
+      )}
       <BaseConfirmModal
         isOpen={enableConfirm}
         title="启用第三方 WebDAV 备份？"
@@ -242,7 +254,7 @@ const WebdavConfig: React.FC = () => {
             fullWidth
             size="sm"
             className="mr-1"
-            onPress={handleBackup}
+            onPress={() => setExternalScope(true)}
           >
             {t('webdav.backup')}
           </Button>

@@ -1,20 +1,15 @@
-import { createHash, randomUUID } from 'crypto'
-import { open, rename, rm } from 'fs/promises'
-import { app, dialog, BrowserWindow, shell } from 'electron'
-import { isPortable } from '../utils/dirs'
+import { createHash } from 'crypto'
+import { mkdtemp, open, rename, rm } from 'fs/promises'
+import path from 'path'
+import { app, dialog, BrowserWindow } from 'electron'
+import { isPortable, exeDir } from '../utils/dirs'
+import { formatProductVersion } from '../../shared/product'
 import { dexAccountRequest, dexServerUrl } from './dex-account'
 import { fetchReleaseAsset } from './release-download'
-
-interface Release {
-  version: string
-  notes: string
-  url: string
-  sha256: string
-  size: number
-}
-let available: Release | undefined
+import { selectUpdateArtifact, stagePortableUpdate, type UpdateRelease } from './update-package'
+import { startUpdateRunner, updateSiblingPaths } from './update-runner'
+let available: UpdateRelease | undefined
 let downloading = false
-
 function releaseTag(version: string): string {
   if (
     typeof version !== 'string' ||
@@ -47,60 +42,35 @@ export async function checkUpdate(): Promise<IAppVersion | undefined> {
     '/api/v1/releases/latest?product=navio&channel=beta&platform=win32-x64',
     {},
     false
-  )) as { release: Release | null }
+  )) as { release: UpdateRelease | null }
   if (data.release) releaseTag(data.release.version)
   if (!data.release || !newerVersion(data.release.version, app.getVersion())) {
     available = undefined
     return undefined
   }
-  if (
-    !/^[a-f0-9]{64}$/i.test(data.release.sha256) ||
-    !Number.isSafeInteger(data.release.size) ||
-    data.release.size < 1 ||
-    data.release.size > 1024 ** 3
-  )
-    throw new Error('更新清单缺少有效的文件校验信息。')
   available = data.release
   return { version: available.version, changelog: available.notes }
 }
-
 export async function downloadAndInstallUpdate(version: string): Promise<void> {
-  if (downloading) throw new Error('已有更新正在下载。')
-  if (!available || available.version !== version) {
-    await checkUpdate()
-  }
-  const release = available
-  if (!release || release.version !== version) throw new Error('此更新已变更，请重新检查。')
-  if (!isPortable()) {
-    const tag = releaseTag(release.version)
-    const result = await dialog.showMessageBox({
-      type: 'info',
-      title: '更新 Navio',
-      message: `下载 Navio ${release.version} 安装包`,
-      detail:
-        '在此版本发布页下载 Windows x64 的 setup.exe 安装包，从系统托盘退出 Navio 后运行。安装版配置保存在 %APPDATA%\\DEX-STUDIO-NEXT，更新后继续保留。',
-      buttons: ['打开发布页', '取消'],
-      defaultId: 0,
-      cancelId: 1
-    })
-    if (result.response === 0)
-      await shell.openExternal(`https://github.com/poniard-li/Navio/releases/tag/${tag}`)
-    return
-  }
-  const server = await dexServerUrl(),
-    url = new URL(release.url, server)
-  if (url.protocol !== 'https:' && url.origin !== server)
-    throw new Error('下载地址必须使用 HTTPS。')
-  const result = await dialog.showSaveDialog({
-    title: '下载 Navio 免安装更新包',
-    defaultPath: `Navio-${version.replace(/[^\w.-]/g, '')}-Windows-x64.zip`,
-    filters: [{ name: 'ZIP', extensions: ['zip'] }]
-  })
-  if (result.canceled || !result.filePath) return
-  const temporary = `${result.filePath}.${randomUUID()}.part`
+  if (downloading) throw new Error('已有更新正在下载或准备安装。')
   downloading = true
+  let directory: string | undefined
+  let stage: string | undefined
+  let handedOff = false
   try {
-    const response = await fetchReleaseAsset(url, server, AbortSignal.timeout(20 * 60 * 1000))
+    if (!available || available.version !== version) await checkUpdate()
+    const release = available
+    if (!release || release.version !== version) throw new Error('此更新已变更，请重新检查。')
+    const portable = isPortable(),
+      artifact = selectUpdateArtifact(release, portable)
+    directory = await mkdtemp(path.join(app.getPath('temp'), 'navio-update-'))
+    const filePath = path.join(directory, portable ? 'Navio.zip' : 'Navio-setup.exe'),
+      temporary = filePath + '.part'
+    const response = await fetchReleaseAsset(
+      new URL(artifact.url),
+      await dexServerUrl(),
+      AbortSignal.timeout(20 * 60 * 1000)
+    )
     if (!response.ok || !response.body) throw new Error(`下载失败（${response.status}）`)
     const file = await open(temporary, 'wx'),
       hash = createHash('sha256')
@@ -112,30 +82,57 @@ export async function downloadAndInstallUpdate(version: string): Promise<void> {
     try {
       for await (const chunk of response.body) {
         size += chunk.byteLength
-        if (size > release.size) throw new Error('更新包大小与发布清单不一致。')
+        if (size > artifact.size) throw new Error('更新包大小与发布清单不一致。')
         hash.update(chunk)
         await file.writeFile(chunk)
-        progress({ status: 'downloading', percent: Math.round((size / release.size) * 100) })
+        progress({ status: 'downloading', percent: Math.round((size / artifact.size) * 100) })
       }
       progress({ status: 'verifying' })
-      if (size !== release.size || hash.digest('hex') !== release.sha256.toLowerCase())
+      if (size !== artifact.size || hash.digest('hex') !== artifact.sha256.toLowerCase())
         throw new Error('更新包校验失败，未执行更新。')
       await file.sync()
     } finally {
       await file.close()
     }
-    await rename(temporary, result.filePath)
-    shell.showItemInFolder(result.filePath)
-    await dialog.showMessageBox({
+    await rename(temporary, filePath)
+    const target = exeDir(),
+      siblings = updateSiblingPaths(target)
+    if (portable) {
+      stage = siblings.stage
+      await stagePortableUpdate(filePath, stage)
+    }
+    const confirmation = await dialog.showMessageBox({
       type: 'info',
-      title: '更新包已下载并通过校验',
-      message: '当前为免安装公测版，请退出 Navio 后解压新版。',
-      detail:
-        '将原目录中的 DEX-STUDIO-NEXT 数据文件夹复制到新版目录，可保留本机设置。不要覆盖正在运行的程序。',
-      buttons: ['知道了']
+      title: '安装 Navio 更新',
+      message: `Navio ${formatProductVersion(version)} 已下载并通过校验`,
+      detail: portable
+        ? '现在退出并更新，完成后自动重启。本机数据会保留，原程序将留在相邻的 Navio-before-update 文件夹中。更新期间连接会暂时中断。'
+        : '现在退出并安装到原目录，完成后自动重启。本机设置和订阅会保留，更新期间连接会暂时中断。',
+      buttons: ['退出并更新', '暂不更新'],
+      defaultId: 0,
+      cancelId: 1
     })
+    if (confirmation.response !== 0) return
+    await startUpdateRunner(
+      {
+        pid: process.pid,
+        kind: portable ? 'portable' : 'installer',
+        target,
+        stage: stage || '',
+        backup: siblings.backup,
+        package: filePath,
+        sha256: artifact.sha256.toLowerCase(),
+        version
+      },
+      directory
+    )
+    handedOff = true
+    app.quit()
   } finally {
-    downloading = false
-    await rm(temporary, { force: true }).catch(() => {})
+    if (!handedOff) {
+      downloading = false
+      if (stage) await rm(stage, { recursive: true, force: true }).catch(() => {})
+      if (directory) await rm(directory, { recursive: true, force: true }).catch(() => {})
+    }
   }
 }

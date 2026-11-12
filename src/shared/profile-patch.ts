@@ -2,6 +2,17 @@ export interface MergeResult {
   value: unknown
   conflicts: string[]
 }
+export interface ProfileConflict {
+  path: string
+  base: unknown
+  local: unknown
+  incoming: unknown
+}
+export interface ProfileConflictSelection {
+  revision: string
+  choices: Record<string, 'local' | 'incoming'>
+}
+export type ProfileResolution = 'keep-local' | 'use-incoming' | ProfileConflictSelection
 const same = (a: unknown, b: unknown): boolean => JSON.stringify(a) === JSON.stringify(b)
 const object = (v: unknown): v is Record<string, unknown> =>
   !!v && typeof v === 'object' && !Array.isArray(v)
@@ -14,7 +25,9 @@ export function mergeProfileChanges(
   base: unknown,
   local: unknown,
   incoming: unknown,
-  path = ''
+  path = '',
+  choices: Record<string, 'local' | 'incoming'> = {},
+  details?: ProfileConflict[]
 ): MergeResult {
   if (same(base, local)) return { value: incoming, conflicts: [] }
   if (same(base, incoming) || same(local, incoming)) return { value: local, conflicts: [] }
@@ -28,7 +41,14 @@ export function mergeProfileChanges(
     ])) {
       if (['__proto__', 'prototype', 'constructor'].includes(key))
         throw new Error('配置包含不支持的键')
-      const result = mergeProfileChanges(base[key], local[key], incoming[key], `${path}/${key}`)
+      const result = mergeProfileChanges(
+        base[key],
+        local[key],
+        incoming[key],
+        `${path}/${encodeURIComponent(key)}`,
+        choices,
+        details
+      )
       if (result.value !== undefined) value[key] = result.value
       conflicts.push(...result.conflicts)
     }
@@ -53,11 +73,23 @@ export function mergeProfileChanges(
       ...local.map((v) => v.name),
       ...base.map((v) => v.name)
     ])) {
-      const result = mergeProfileChanges(b.get(name), l.get(name), r.get(name), `${path}[${name}]`)
+      const result = mergeProfileChanges(
+        b.get(name),
+        l.get(name),
+        r.get(name),
+        `${path}[${encodeURIComponent(name)}]`,
+        choices,
+        details
+      )
       if (result.value !== undefined) value.push(result.value)
       conflicts.push(...result.conflicts)
     }
     return { value, conflicts }
   }
-  return { value: local, conflicts: [path || '/'] }
+  const conflictPath = path || '/'
+  details?.push({ path: conflictPath, base, local, incoming })
+  return {
+    value: choices[conflictPath] === 'incoming' ? incoming : local,
+    conflicts: [conflictPath]
+  }
 }

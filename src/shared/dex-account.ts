@@ -32,6 +32,26 @@ export interface DexAccountMutation {
   ok: true
   user: DexUser
 }
+export interface DexSsoOffer {
+  user: Pick<DexUser, 'id' | 'username' | 'displayName'>
+  sourceAppId: string
+}
+export interface DexProductAccounts {
+  mysteryAvailable: boolean
+  products: { product: string; username: string; createdAt: string }[]
+}
+export interface DexMysteryProof {
+  proof: string
+  dexUsername: string
+  legacyUsername: string
+  expiresIn: number
+}
+export interface DexRecoveryInfo {
+  username: string
+  contactType: 'email' | 'phone'
+  maskedContact: string
+  expiresAt: string
+}
 export type DexAccountAction =
   | 'status'
   | 'login'
@@ -47,6 +67,17 @@ export type DexAccountAction =
   | 'revoke-device'
   | 'unlink-provider'
   | 'revoke-grant'
+  | 'sso-info'
+  | 'sso-continue'
+  | 'sso-forget'
+  | 'sso-enable'
+  | 'products'
+  | 'mystery-verify'
+  | 'mystery-link'
+  | 'mystery-unlink'
+  | 'recovery-info'
+  | 'recovery-request'
+  | 'recovery-complete'
   | 'themes'
   | 'my-themes'
   | 'favorite-themes'
@@ -56,6 +87,7 @@ export type DexAccountAction =
 export interface DexServiceStatus {
   providers: { email: boolean; sms: boolean; google: boolean; github: boolean }
   registrationEnabled: boolean
+  accountFeatures?: { sso: boolean; recovery: boolean; mysteryLink: boolean }
 }
 export interface DexOAuthRequest {
   requestCode: string

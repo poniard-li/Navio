@@ -16,11 +16,15 @@ import {
   setDexServerUrl,
   type DexAccount,
   type DexOAuthRequest,
-  type DexServiceStatus
+  type DexServiceStatus,
+  type DexSsoOffer
 } from '@renderer/utils/ipc'
 import { markInitialContentPartReady } from '@renderer/utils/startup'
+import { version } from '@renderer/utils/init'
+import { formatProductVersion } from '../../../../shared/product'
 import AccountForm from './account-form'
 import OAuthFlow from './oauth-flow'
+import AccountRecovery from './account-recovery'
 import '../../assets/navio.css'
 
 export default function AccountGate({
@@ -38,12 +42,18 @@ export default function AccountGate({
   const [settings, setSettings] = useState(false)
   const [purpose, setPurpose] = useState(false)
   const [showForm, setShowForm] = useState(false)
+  const [ssoOffer, setSsoOffer] = useState<DexSsoOffer | null>(null)
+  const [recovering, setRecovering] = useState(false)
   const refresh = useCallback(async (): Promise<void> => {
     try {
       const result = await getDexAccount()
       setAccount(result)
       setServer(result.serverUrl)
       if (result.status === 'signed-out') {
+        setSsoOffer(null)
+        void dexAccountAction<DexSsoOffer | null>('sso-info')
+          .then(setSsoOffer)
+          .catch(() => {})
         setStatus(undefined)
         void dexAccountAction<DexServiceStatus>('status')
           .then(setStatus)
@@ -96,20 +106,65 @@ export default function AccountGate({
       <div className="navio-auth-drag" />
       <div className="navio-auth-layout">
         <section className="navio-auth-brand">
-          <p className="navio-eyebrow">A MORE CONSIDERED CONNECTION</p>
+          <p className="navio-eyebrow">D.E.X ACCOUNT</p>
           <h1>Navio</h1>
           <p>
-            从连接开始，
+            一个账号，
             <br />
-            让每一次选择更清晰。
+            使用 D.E.X 的各款产品。
           </p>
-          <small>Public Beta · Built by D.E.X Studio</small>
+          <small>
+            {formatProductVersion(version)}
+            <br />
+            Built by D.E.X Studio
+          </small>
         </section>
         <section className="navio-auth-panel">
           <h2>欢迎使用 Navio</h2>
           <p>使用 D.E.X 统一账号，进入你的主题空间。注册、登录和账号管理，都可以在软件内完成。</p>
-          {oauth ? (
+          {recovering ? (
+            <AccountRecovery
+              onBack={() => {
+                setRecovering(false)
+                setShowForm(true)
+              }}
+            />
+          ) : oauth ? (
             <OAuthFlow request={oauth} onComplete={complete} onCancel={() => setOAuth(undefined)} />
+          ) : !showForm && ssoOffer ? (
+            <div className="space-y-3 mt-5 rounded-xl bg-default-100 p-4">
+              <p className="text-sm break-words">
+                此 Windows 用户已在 D.E.X 软件中登录 <strong>@{ssoOffer.user.username}</strong>。
+              </p>
+              <p className="text-xs text-default-500 leading-5">
+                选择继续后，将为 Navio 建立单独的登录会话。本机订阅和节点凭据不会同步。
+              </p>
+              <Button
+                color="primary"
+                fullWidth
+                isLoading={busy}
+                onPress={async () => {
+                  setBusy(true)
+                  setError('')
+                  try {
+                    await dexAccountAction('sso-continue', {
+                      confirmed: true,
+                      expectedUserId: ssoOffer.user.id
+                    })
+                    complete()
+                  } catch (err) {
+                    setError(String(err))
+                  } finally {
+                    setBusy(false)
+                  }
+                }}
+              >
+                以 @{ssoOffer.user.username} 继续
+              </Button>
+              <Button variant="light" fullWidth isDisabled={busy} onPress={() => setShowForm(true)}>
+                切换账号
+              </Button>
+            </div>
           ) : showForm ? (
             <AccountForm
               onComplete={complete}
@@ -130,6 +185,17 @@ export default function AccountGate({
           ) : (
             <Button className="mt-6" color="primary" fullWidth onPress={() => setPurpose(true)}>
               登录或注册 D.E.X 账号
+            </Button>
+          )}
+          {!recovering && !oauth && status?.accountFeatures?.recovery && (
+            <Button
+              variant="light"
+              size="sm"
+              className="mt-3"
+              isDisabled={busy}
+              onPress={() => setRecovering(true)}
+            >
+              无法登录？管理员协助恢复
             </Button>
           )}
           {error && (
@@ -178,7 +244,7 @@ export default function AccountGate({
           <ModalHeader>为什么需要 D.E.X 账号？</ModalHeader>
           <ModalBody>
             <p className="text-sm leading-7">
-              账号用于主题作品、收藏以及未来 D.E.X
+              账号用于主题作品、收藏以及 D.E.X
               产品的统一登录。它不会提供代理线路，也不是订阅服务商账号。
             </p>
             <p className="text-sm leading-7">

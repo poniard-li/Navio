@@ -1,10 +1,11 @@
 import { Button } from '@heroui/react'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
-import { checkUpdate, downloadAndInstallUpdate } from '@renderer/utils/ipc'
-import React, { lazy, Suspense, useEffect, useRef, useState } from 'react'
+import { checkUpdate } from '@renderer/utils/ipc'
+import React, { lazy, Suspense, useState } from 'react'
 import useSWR from 'swr'
 import { platform } from '@renderer/utils/init'
 import { MdNewReleases } from 'react-icons/md'
+import { formatProductVersion } from '../../../../shared/product'
 
 const UpdaterModal = lazy(() => import('./updater-modal'))
 
@@ -15,9 +16,8 @@ interface Props {
 const UpdaterButton: React.FC<Props> = (props) => {
   const { appConfig } = useAppConfig()
   const { iconOnly } = props
-  const { autoCheckUpdate = false, silentUpdate = true, useWindowFrame = false } = appConfig || {}
+  const { autoCheckUpdate = true, useWindowFrame = false } = appConfig || {}
   const [openModal, setOpenModal] = useState(false)
-  const silentUpdateInProgress = useRef(false)
   const { data: latest } = useSWR(
     autoCheckUpdate ? 'checkUpdate' : undefined,
     autoCheckUpdate ? checkUpdate : (): undefined => {},
@@ -25,19 +25,7 @@ const UpdaterButton: React.FC<Props> = (props) => {
       refreshInterval: 1000 * 60 * 10
     }
   )
-  const canSilentlyUpdate = platform === 'win32' || platform === 'darwin'
-  const shouldSilentlyUpdate = autoCheckUpdate && silentUpdate && canSilentlyUpdate
-
-  useEffect(() => {
-    if (!latest || !shouldSilentlyUpdate || silentUpdateInProgress.current) return
-
-    silentUpdateInProgress.current = true
-    void downloadAndInstallUpdate(latest.version).catch(() => {
-      silentUpdateInProgress.current = false
-    })
-  }, [latest, shouldSilentlyUpdate])
-
-  if (!latest || shouldSilentlyUpdate) return null
+  if (!latest) return null
 
   return (
     <>
@@ -55,6 +43,8 @@ const UpdaterButton: React.FC<Props> = (props) => {
       {iconOnly ? (
         <Button
           isIconOnly
+          aria-label={formatProductVersion(latest.version)}
+          title={formatProductVersion(latest.version)}
           variant="flat"
           className="rounded-full app-nodrag"
           color="danger"
@@ -74,7 +64,7 @@ const UpdaterButton: React.FC<Props> = (props) => {
             setOpenModal(true)
           }}
         >
-          v{latest.version}
+          {formatProductVersion(latest.version)}
         </Button>
       )}
     </>

@@ -124,6 +124,9 @@ const validInvokeChannels = [
   'startMonitor',
   'quitWithoutCore',
   // System
+  'ensureWindowsTunAccess',
+  'getWindowsServiceStatus',
+  'manageWindowsService',
   'triggerSysProxy',
   'checkTunPermissions',
   'grantTunPermissions',
@@ -149,6 +152,8 @@ const validInvokeChannels = [
   'installSpecificMihomoCore',
   'clearMihomoVersionCache',
   // Backup
+  'previewBackupExternalFiles',
+  'approveBackupExternalFiles',
   'webdavBackup',
   'webdavRestore',
   'listWebdavBackups',
@@ -231,7 +236,8 @@ const validListenChannels = [
   'updateDownloadProgress',
   'pluginConfigUpdated',
   'openPluginFile',
-  'dnsOverrideAutoDisabled'
+  'dnsOverrideAutoDisabled',
+  'dexThemeBackground'
 ] as const
 
 // 允许的 send channels 白名单

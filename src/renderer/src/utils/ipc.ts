@@ -10,6 +10,10 @@ export type {
   DexAccount,
   DexAccountSecurity,
   DexAccountMutation,
+  DexSsoOffer,
+  DexProductAccounts,
+  DexMysteryProof,
+  DexRecoveryInfo,
   DexSecurityProof,
   DexUnlinkTarget,
   DexUser,
@@ -230,6 +234,10 @@ interface IpcApi {
   installSpecificMihomoCore: (version: string) => Promise<void>
   clearMihomoVersionCache: () => Promise<void>
   // Backup
+  previewBackupExternalFiles: () => Promise<
+    import('../../../shared/backup-external').BackupExternalPreview
+  >
+  approveBackupExternalFiles: (token: string, ids: string[]) => Promise<void>
   webdavBackup: () => Promise<boolean>
   webdavRestore: (filename: string, password?: string) => Promise<void>
   listWebdavBackups: () => Promise<string[]>
@@ -431,6 +439,8 @@ export const {
   installSpecificMihomoCore,
   clearMihomoVersionCache,
   // Backup
+  previewBackupExternalFiles,
+  approveBackupExternalFiles,
   webdavBackup,
   webdavRestore,
   listWebdavBackups,
@@ -561,6 +571,8 @@ export interface ProfileChanges {
   local: string
   incoming: string
   conflicts: string[]
+  details: import('../../../shared/profile-patch').ProfileConflict[]
+  revision: string
   hasChanges: boolean
   hasPending: boolean
 }
@@ -568,7 +580,7 @@ export const getProfileChanges = (id: string): Promise<ProfileChanges> =>
   invoke('getProfileChanges', id)
 export const resolveProfileChanges = (
   id: string,
-  choice: 'keep-local' | 'use-incoming'
+  choice: import('../../../shared/profile-patch').ProfileResolution
 ): Promise<void> => invoke('resolveProfileChanges', id, choice)
 
 export const launchProxyTerminal = (): Promise<void> => invoke('launchProxyTerminal')

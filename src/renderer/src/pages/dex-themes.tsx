@@ -14,7 +14,9 @@ import {
 import { useNavigate } from 'react-router-dom'
 import BasePage from '@renderer/components/base/base-page'
 import ThemeCommunity from '@renderer/components/dex/theme-community'
+import { ThemeCanvas } from '@renderer/components/dex/theme-background'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import { themeAssetUrl, type ThemeAsset } from '../../../shared/theme-media'
 import { PRODUCT_NAME } from '../../../shared/product'
 import {
   DEX_COLOR_KEYS,
@@ -55,6 +57,47 @@ async function request<T>(action: DexThemeAction, payload: unknown = {}): Promis
   return result as T
 }
 
+async function verifyMediaPlayback(asset: ThemeAsset): Promise<void> {
+  if (asset.mime.startsWith('image/')) {
+    const image = new Image()
+    image.src = themeAssetUrl(asset)
+    try {
+      await image.decode()
+    } catch {
+      throw new Error('图片无法解码，请选择有效的静态图片。')
+    }
+    return
+  }
+  await new Promise<void>((resolve, reject) => {
+    const video = document.createElement('video')
+    const finish = (error?: Error): void => {
+      clearTimeout(timer)
+      video.onloadeddata = null
+      video.onerror = null
+      video.removeAttribute('src')
+      video.load()
+      if (error) reject(error)
+      else resolve()
+    }
+    const timer = setTimeout(() => finish(new Error('读取视频超时，请选择可播放的短视频。')), 15000)
+    video.muted = true
+    video.preload = 'auto'
+    video.onloadeddata = () =>
+      finish(
+        video.videoWidth > 0 &&
+          video.videoHeight > 0 &&
+          video.videoWidth <= 8192 &&
+          video.videoHeight <= 8192
+          ? undefined
+          : new Error('视频没有可用画面，或尺寸超过 8192 像素。')
+      )
+    video.onerror = () =>
+      finish(new Error('此视频编码无法播放，请选择 H.264 MP4 或 VP8/VP9 WebM。'))
+    video.src = themeAssetUrl(asset)
+    video.load()
+  })
+}
+
 function Preview({
   theme,
   large = false
@@ -73,10 +116,11 @@ function Preview({
         borderRadius: Math.min(theme.radius, 12),
         height: large ? 164 : 120
       }}
-      className="flex overflow-hidden border"
+      className="relative flex overflow-hidden border"
     >
+      <ThemeCanvas theme={theme} playback={large} />
       <div
-        className="flex w-[25%] min-w-16 max-w-24 flex-col gap-1 border-r p-2"
+        className="relative z-10 flex w-[25%] min-w-16 max-w-24 flex-col gap-1 border-r p-2"
         style={{ background: c.surface, color: c.text, borderColor: c.border }}
       >
         <div className="mb-1 text-[9px] font-bold tracking-wider">{PRODUCT_NAME}</div>
@@ -101,7 +145,7 @@ function Preview({
           <span className="h-2 w-4 rounded-full" style={{ background: c.accent }} />
         </div>
       </div>
-      <div className="min-w-0 flex-1 p-2.5">
+      <div className="relative z-10 min-w-0 flex-1 p-2.5">
         <div className="mb-2 flex items-center justify-between gap-2 text-[8px]">
           <span className="font-semibold">代理节点</span>
           <span className="text-[6px]" style={{ color: c.muted }}>
@@ -160,6 +204,8 @@ const DexThemes: React.FC = () => {
   const [serverOpen, setServerOpen] = useState(false)
   const [serverUrl, setServerUrl] = useState('')
   const [publishTheme, setPublishTheme] = useState<DexTheme | null>(null)
+  const [pendingVideo, setPendingVideo] = useState<ThemeAsset | null>(null)
+  const [mediaRevision, setMediaRevision] = useState(0)
   const { appConfig, mutateAppConfig } = useAppConfig()
   const navigate = useNavigate()
   const activeId =
@@ -216,6 +262,7 @@ const DexThemes: React.FC = () => {
     setEditingExisting(edit)
     setLivePreview(true)
     setNotice(null)
+    setPendingVideo(null)
     setDraft({
       ...structuredClone(base),
       id: edit ? base.id : `custom-${crypto.randomUUID().slice(0, 12)}`,
@@ -225,6 +272,28 @@ const DexThemes: React.FC = () => {
   }
   const changeDraft = (patch: Partial<DexTheme>): void =>
     setDraft((current) => (current ? { ...current, ...patch } : null))
+  const chooseMedia = async (kind: 'image' | 'video', poster = false): Promise<void> => {
+    await run(async () => {
+      const asset = await request<ThemeAsset | null>('importMedia', { kind })
+      if (!asset || !draft) return
+      await verifyMediaPlayback(asset)
+      if (kind === 'video') {
+        setPendingVideo(asset)
+        setNotice({ text: '视频已选择。再选择一张静态封面，减少动态或隐藏窗口时显示封面。' })
+      } else if (poster && (pendingVideo || draft.background?.type === 'video')) {
+        const video =
+          pendingVideo || (draft.background?.type === 'video' ? draft.background.asset : null)
+        if (video)
+          changeDraft({
+            background: { type: 'video', asset: video, poster: asset, opacity: 0.35, fit: 'cover' }
+          })
+        setPendingVideo(null)
+      } else {
+        changeDraft({ background: { type: 'image', asset, opacity: 0.35, fit: 'cover' } })
+        setPendingVideo(null)
+      }
+    })
+  }
   const saveDraft = async (apply: boolean): Promise<void> => {
     if (!draft) return
     await run(async () => {
@@ -272,6 +341,19 @@ const DexThemes: React.FC = () => {
             <p className="mt-1 text-xs text-default-500">选择外观，或编辑并分享自己的设计。</p>
           </div>
           <div className="flex gap-2">
+            <Button
+              size="sm"
+              variant="light"
+              isDisabled={busy}
+              onPress={() =>
+                void run(async () => {
+                  const value = await request<{ removed: number }>('pruneMedia')
+                  setNotice({ text: `已清理 ${value.removed} 个未被本地设计使用的媒体文件` })
+                })
+              }
+            >
+              清理未使用媒体
+            </Button>
             <Button
               size="sm"
               variant="flat"
@@ -388,7 +470,7 @@ const DexThemes: React.FC = () => {
             </h2>
             <p className="mt-2 text-sm text-default-500">
               {tab === 'local'
-                ? '从任意精选主题创建副本，或者导入主题 JSON 文件。'
+                ? '从精选主题创建副本，或导入主题文件。'
                 : tab === 'remote'
                   ? '填写部署好的服务地址，再刷新浏览远程设计。'
                   : '请稍候。'}
@@ -401,7 +483,22 @@ const DexThemes: React.FC = () => {
                 key={theme.id}
                 className="min-w-0 overflow-hidden rounded-2xl border border-divider bg-content1 p-3"
               >
-                <Preview theme={theme} />
+                <Preview key={mediaRevision} theme={theme} />
+                {tab === 'remote' && theme.background && 'asset' in theme.background && (
+                  <Button
+                    size="sm"
+                    variant="light"
+                    isDisabled={busy}
+                    onPress={() =>
+                      void run(async () => {
+                        await request('loadMedia', { theme })
+                        setMediaRevision((value) => value + 1)
+                      })
+                    }
+                  >
+                    下载媒体预览
+                  </Button>
+                )}
                 <div className="mt-2.5 flex items-start justify-between gap-2">
                   <div className="min-w-0">
                     <h2 className="truncate text-sm font-semibold" title={theme.description}>
@@ -437,14 +534,21 @@ const DexThemes: React.FC = () => {
                       size="sm"
                       variant="light"
                       isDisabled={busy}
-                      onPress={() => openEditor(theme, tab === 'local')}
+                      onPress={() => {
+                        if (tab === 'remote')
+                          void run(async () => {
+                            await request('loadMedia', { theme })
+                            openEditor(theme)
+                          })
+                        else openEditor(theme, tab === 'local')
+                      }}
                     >
                       <LuPencil />
                     </Button>
                     <Button
                       isIconOnly
-                      title="导出 JSON"
-                      aria-label="导出 JSON"
+                      title="导出完整主题"
+                      aria-label="导出完整主题"
                       size="sm"
                       variant="light"
                       isDisabled={busy}
@@ -520,7 +624,7 @@ const DexThemes: React.FC = () => {
       >
         <ModalContent>
           <ModalHeader className="flex-col gap-1 text-base">
-            <span>{editingExisting ? '编辑你的设计' : '创造一套属于你的主题'}</span>
+            <span>{editingExisting ? '编辑主题' : '新建主题'}</span>
             <span className="text-xs font-normal text-default-500">
               实时预览只临时改变外观，取消后恢复已应用主题。
             </span>
@@ -606,6 +710,179 @@ const DexThemes: React.FC = () => {
                       </label>
                     ))}
                   </div>
+                  <label className="block">
+                    <span className={fieldLabel}>系统字体（未安装时使用默认字体）</span>
+                    <input
+                      className={inputClass}
+                      maxLength={100}
+                      list="navio-theme-fonts"
+                      value={draft.fontFamily || ''}
+                      placeholder="Segoe UI, Microsoft YaHei"
+                      onChange={(event) =>
+                        changeDraft({ fontFamily: event.target.value || undefined })
+                      }
+                    />
+                    <datalist id="navio-theme-fonts">
+                      <option value="Segoe UI" />
+                      <option value="Microsoft YaHei" />
+                      <option value="SimHei" />
+                      <option value="Arial" />
+                      <option value="Georgia" />
+                    </datalist>
+                  </label>
+                  <fieldset className="space-y-3 rounded-xl border border-divider p-3">
+                    <legend className="px-1 text-xs">页面背景</legend>
+                    <select
+                      aria-label="背景类型"
+                      className={inputClass}
+                      value={pendingVideo ? 'video' : draft.background?.type || 'default'}
+                      onChange={(event) => {
+                        const type = event.target.value
+                        setPendingVideo(null)
+                        if (type === 'default') changeDraft({ background: undefined })
+                        else if (type === 'solid' || type === 'gradient')
+                          changeDraft({
+                            background: {
+                              type,
+                              colors:
+                                type === 'solid'
+                                  ? [draft.colors.bg]
+                                  : [draft.colors.bg, draft.colors.surfaceRaised],
+                              angle: 135
+                            }
+                          })
+                        else void chooseMedia(type as 'image' | 'video')
+                      }}
+                    >
+                      <option value="default">跟随页面配色</option>
+                      <option value="solid">纯色</option>
+                      <option value="gradient">渐变</option>
+                      <option value="image">静态图片</option>
+                      <option value="video">视频 + 静态封面</option>
+                    </select>
+                    {draft.background && 'colors' in draft.background && (
+                      <>
+                        <div className="flex flex-wrap gap-3">
+                          {draft.background.colors.map((color, index) => (
+                            <label key={index} className="text-xs">
+                              颜色 {index + 1}
+                              <input
+                                type="color"
+                                aria-label={`背景颜色 ${index + 1}`}
+                                className="block mt-1"
+                                value={color}
+                                onChange={(event) => {
+                                  if (draft.background && 'colors' in draft.background)
+                                    changeDraft({
+                                      background: {
+                                        ...draft.background,
+                                        colors: draft.background.colors.map((item, position) =>
+                                          position === index ? event.target.value : item
+                                        )
+                                      }
+                                    })
+                                }}
+                              />
+                            </label>
+                          ))}
+                        </div>
+                        {draft.background.type === 'gradient' && (
+                          <label className="block text-xs">
+                            渐变角度 · {draft.background.angle ?? 135}°
+                            <input
+                              className="w-full mt-2"
+                              type="range"
+                              min={0}
+                              max={360}
+                              value={draft.background.angle ?? 135}
+                              onChange={(event) => {
+                                if (draft.background?.type === 'gradient')
+                                  changeDraft({
+                                    background: {
+                                      ...draft.background,
+                                      angle: Number(event.target.value)
+                                    }
+                                  })
+                              }}
+                            />
+                          </label>
+                        )}
+                      </>
+                    )}
+                    {(pendingVideo || draft.background?.type === 'video') && (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          isDisabled={busy}
+                          onPress={() => void chooseMedia('video')}
+                        >
+                          更换视频
+                        </Button>
+                        <Button
+                          size="sm"
+                          color={pendingVideo ? 'primary' : 'default'}
+                          isDisabled={busy}
+                          onPress={() => void chooseMedia('image', true)}
+                        >
+                          {pendingVideo ? '选择必要的静态封面' : '更换封面'}
+                        </Button>
+                      </div>
+                    )}
+                    {draft.background?.type === 'image' && (
+                      <Button size="sm" isDisabled={busy} onPress={() => void chooseMedia('image')}>
+                        更换图片
+                      </Button>
+                    )}
+                    {draft.background && 'asset' in draft.background && (
+                      <>
+                        <label className="block text-xs">
+                          背景透明度 · {Math.round((draft.background.opacity ?? 0.35) * 100)}%
+                          <input
+                            className="w-full mt-2"
+                            type="range"
+                            min={0}
+                            max={100}
+                            value={Math.round((draft.background.opacity ?? 0.35) * 100)}
+                            onChange={(event) => {
+                              if (draft.background && 'asset' in draft.background)
+                                changeDraft({
+                                  background: {
+                                    ...draft.background,
+                                    opacity: Number(event.target.value) / 100
+                                  }
+                                })
+                            }}
+                          />
+                        </label>
+                        <select
+                          aria-label="背景适配"
+                          className={inputClass}
+                          value={draft.background.fit || 'cover'}
+                          onChange={(event) => {
+                            if (draft.background && 'asset' in draft.background)
+                              changeDraft({
+                                background: {
+                                  ...draft.background,
+                                  fit: event.target.value as 'cover' | 'contain'
+                                }
+                              })
+                          }}
+                        >
+                          <option value="cover">填满背景</option>
+                          <option value="contain">显示完整画面</option>
+                        </select>
+                      </>
+                    )}
+                    <p className="text-xs text-default-500 leading-5">
+                      图片支持 PNG/JPEG/静态 WebP（8 MB），视频支持 MP4/WebM（32
+                      MB）。视频静音循环，减少动态或窗口隐藏时暂停。
+                    </p>
+                    {pendingVideo && (
+                      <p role="status" className="text-xs text-warning-700 dark:text-warning-400">
+                        视频尚未应用，请选择静态封面后再保存。
+                      </p>
+                    )}
+                  </fieldset>
                 </div>
                 <div>
                   <Preview theme={draft} large />
@@ -619,8 +896,7 @@ const DexThemes: React.FC = () => {
                     在整个应用中实时预览
                   </label>
                   <p className="mt-3 text-xs leading-relaxed text-default-500">
-                    设计仅使用颜色与圆角，不允许注入脚本、外链或自定义 CSS。保存为 JSON
-                    后可在你的服务器分享。
+                    主题包含配色、系统字体和可选媒体背景。导出媒体设计时会生成包含资源的完整主题包；发布会上传设计使用的图片、视频和封面。
                   </p>
                 </div>
               </div>
@@ -635,10 +911,19 @@ const DexThemes: React.FC = () => {
             <Button variant="light" isDisabled={busy} onPress={() => setDraft(null)}>
               取消
             </Button>
-            <Button variant="bordered" isDisabled={busy} onPress={() => void saveDraft(false)}>
+            <Button
+              variant="bordered"
+              isDisabled={busy || !!pendingVideo}
+              onPress={() => void saveDraft(false)}
+            >
               保存设计
             </Button>
-            <Button color="primary" isLoading={busy} onPress={() => void saveDraft(true)}>
+            <Button
+              color="primary"
+              isLoading={busy}
+              isDisabled={!!pendingVideo}
+              onPress={() => void saveDraft(true)}
+            >
               保存并应用
             </Button>
           </ModalFooter>
@@ -773,6 +1058,11 @@ const DexThemes: React.FC = () => {
       </Modal>
       {communityOpen && (
         <ThemeCommunity
+          onEdit={(theme) => {
+            setCommunityOpen(false)
+            setEditingExisting(true)
+            setDraft(theme)
+          }}
           onClose={() => setCommunityOpen(false)}
           onApplied={() => {
             void load()

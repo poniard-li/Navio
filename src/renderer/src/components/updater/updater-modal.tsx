@@ -12,6 +12,7 @@ import ReactMarkdown from 'react-markdown'
 import React, { useState, useEffect } from 'react'
 import { downloadAndInstallUpdate } from '@renderer/utils/ipc'
 import { useTranslation } from 'react-i18next'
+import { formatProductVersion } from '../../../../shared/product'
 
 interface Props {
   version: string
@@ -46,7 +47,7 @@ const UpdaterModal: React.FC<Props> = (props) => {
     >
       <ModalContent className="h-full w-[calc(100%-100px)]">
         <ModalHeader className="flex justify-between app-drag">
-          <div>{t('common.updater.versionReady', { version })}</div>
+          <div>{formatProductVersion(version)}</div>
           <Button
             color="primary"
             size="sm"
@@ -60,7 +61,7 @@ const UpdaterModal: React.FC<Props> = (props) => {
         </ModalHeader>
         <ModalBody className="h-full">
           <p className="text-xs text-default-500">
-            免安装版会下载并校验更新 ZIP。完成后请退出 Navio，将新版本解压到新的文件夹再运行。
+            将下载与当前版本类型匹配的更新包。校验通过后，由你确认退出更新；完成后自动重启并保留本机配置。
           </p>
           <div className="markdown-body select-text">
             <ReactMarkdown
@@ -114,7 +115,7 @@ const UpdaterModal: React.FC<Props> = (props) => {
                 }
               }}
             >
-              下载更新包
+              下载并准备更新
             </Button>
           </div>
         </ModalFooter>

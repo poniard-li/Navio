@@ -3,6 +3,7 @@ import { Suspense, useCallback, useEffect, useRef, useState, type CSSProperties 
 import { useLocation, useNavigate, useRoutes } from 'react-router-dom'
 import routes, { useDeferredRoutePreload } from '@renderer/routes'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
+import ThemeBackground from '@renderer/components/dex/theme-background'
 import {
   applyTheme,
   setNativeTheme,
@@ -121,13 +122,20 @@ const App: React.FC = () => {
 
   return (
     <AccountGate>
+      <ThemeBackground />
       <div
         className="dex-shell"
         data-collapsed={collapsed}
         data-animations={!disableAnimations}
         data-platform={platform}
         data-frameless={!useWindowFrame}
-        style={{ '--dex-sidebar-width': `${collapsed ? 68 : sidebarWidth}px` } as CSSProperties}
+        style={
+          {
+            '--dex-sidebar-width': `${collapsed ? 68 : sidebarWidth}px`,
+            position: 'relative',
+            zIndex: 1
+          } as CSSProperties
+        }
       >
         {appConfig?.dexNavigation === 'classic' ? (
           <ClassicSidebar

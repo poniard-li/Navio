@@ -25,6 +25,7 @@ import BaseConfirmModal from '../base/base-confirm-modal'
 import { AccountCodeField } from '../dex/account-form'
 import OAuthFlow from '../dex/oauth-flow'
 import AccountUnlinkModal from './account-unlink-modal'
+import AccountProducts from './account-products'
 
 export default function AccountConfig(): React.JSX.Element {
   const [account, setAccount] = useState<DexAccount>()
@@ -256,6 +257,9 @@ export default function AccountConfig(): React.JSX.Element {
           })}
         </div>
       </div>
+      {account?.user && status?.accountFeatures?.sso && (
+        <AccountProducts user={account.user} online={online} />
+      )}
       <div className="space-y-3">
         <h4 className="font-medium">登录设备</h4>
         {!security && <p className="text-sm text-default-500">联网后可查看登录设备。</p>}

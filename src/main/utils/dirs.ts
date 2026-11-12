@@ -33,6 +33,12 @@ export function dataDir(): string {
   return app.getPath('userData')
 }
 
+// Shared only by products running as the same Windows user. The contents are
+// encrypted with Electron safeStorage and partitioned by account-service origin.
+export function dexSharedAccountDir(): string {
+  return path.join(app.getPath('appData'), 'D.E.X', 'Accounts')
+}
+
 export function taskDir(): string {
   const baseDir = dataDir()
   if (!existsSync(baseDir)) {

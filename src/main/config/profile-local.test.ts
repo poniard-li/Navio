@@ -82,7 +82,7 @@ describe('subscription local changes on disk', () => {
   it('passes untouched subscriptions through without creating local state', async () => {
     const original = source()
     expect(await applyProfileLocal(id, original, true)).toBe(original)
-    expect(await getProfileChanges(id)).toEqual({
+    expect(await getProfileChanges(id)).toMatchObject({
       base: original,
       local: original,
       incoming: original,
@@ -173,6 +173,65 @@ describe('subscription local changes on disk', () => {
     })
   })
 
+  it('requires every conflict to be explicitly selected and preserves old files until confirmation', async () => {
+    await saveProfileLocal(id, stringify({ ...local(), 'mixed-port': 7893 }))
+    await expect(applyProfileLocal(id, stringify(incoming()), true)).rejects.toThrow('冲突')
+    const report = await getProfileChanges(id)
+    expect(report.details).toEqual([
+      { path: '/mixed-port', base: 7890, local: 7893, incoming: 7891 },
+      { path: '/proxies[A]/port', base: 80, local: 443, incoming: 8080 }
+    ])
+    const before = [sourcePath(), overlayPath(), pendingPath()].map((path) =>
+      readFileSync(path, 'utf8')
+    )
+    const validate = vi.fn(async () => undefined)
+    await expect(
+      resolveProfileChanges(
+        id,
+        { revision: report.revision, choices: { '/mixed-port': 'local' } },
+        validate
+      )
+    ).rejects.toThrow('每一项')
+    expect(
+      [sourcePath(), overlayPath(), pendingPath()].map((path) => readFileSync(path, 'utf8'))
+    ).toEqual(before)
+    expect(validate).not.toHaveBeenCalled()
+    await resolveProfileChanges(
+      id,
+      {
+        revision: report.revision,
+        choices: { '/mixed-port': 'local', '/proxies[A]/port': 'incoming' }
+      },
+      validate
+    )
+    expect(parse(await applyProfileLocal(id, source()))).toEqual({
+      ...incoming(),
+      'mixed-port': 7893
+    })
+    expect(existsSync(pendingPath())).toBe(false)
+  })
+
+  it('rejects choices made against an older incoming subscription', async () => {
+    await prepareConflict()
+    const report = await getProfileChanges(id)
+    await expect(
+      applyProfileLocal(id, stringify({ ...incoming(), 'mixed-port': 7899 }), true)
+    ).rejects.toThrow('冲突')
+    const before = [sourcePath(), overlayPath(), pendingPath()].map((path) =>
+      readFileSync(path, 'utf8')
+    )
+    await expect(
+      resolveProfileChanges(
+        id,
+        { revision: report.revision, choices: { '/proxies[A]/port': 'incoming' } },
+        async () => undefined
+      )
+    ).rejects.toThrow('已变化')
+    expect(
+      [sourcePath(), overlayPath(), pendingPath()].map((path) => readFileSync(path, 'utf8'))
+    ).toEqual(before)
+  })
+
   it('accepts the incoming profile and removes the superseded overlay and pending update', async () => {
     await prepareConflict()
     const update = readFileSync(pendingPath(), 'utf8')
@@ -190,6 +249,26 @@ describe('subscription local changes on disk', () => {
       hasPending: false,
       conflicts: []
     })
+  })
+
+  it('keeps the newer source and local edits when the source changes during validation', async () => {
+    await prepareConflict()
+    const report = await getProfileChanges(id)
+    const beforeOverlay = readFileSync(overlayPath(), 'utf8')
+    const beforePending = readFileSync(pendingPath(), 'utf8')
+    const newerSource = stringify({ ...base(), 'mixed-port': 9999 })
+    await expect(
+      resolveProfileChanges(
+        id,
+        { revision: report.revision, choices: { '/proxies[A]/port': 'incoming' } },
+        async () => {
+          writeFileSync(sourcePath(), newerSource)
+        }
+      )
+    ).rejects.toThrow('校验期间')
+    expect(source()).toBe(newerSource)
+    expect(readFileSync(overlayPath(), 'utf8')).toBe(beforeOverlay)
+    expect(readFileSync(pendingPath(), 'utf8')).toBe(beforePending)
   })
 
   it('removes only the deleted profile overlay, pending update, hashed draft and recovery drafts', async () => {

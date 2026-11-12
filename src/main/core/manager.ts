@@ -71,6 +71,13 @@ import {
   verifyProcessOwner
 } from './process'
 import { setPublicDNS, recoverDNS } from './dns'
+import {
+  canUseWindowsService,
+  isWindowsServiceActive,
+  spawnWindowsServiceCore,
+  stopWindowsServiceCore,
+  windowsServiceApiPipe
+} from './windows-service'
 
 // 重新导出权限相关函数
 export {
@@ -87,6 +94,7 @@ export {
   checkTunPermissions,
   manualGrantCorePermition
 } from './permissions'
+export { ensureWindowsTunAccess } from './permissions'
 
 export { getDefaultDevice } from './dns'
 
@@ -418,6 +426,8 @@ export function cleanupCoreWatcher(): void {
 
 // 动态生成 IPC 路径
 export const getMihomoIpcPath = (): string => {
+  const servicePipe = windowsServiceApiPipe()
+  if (servicePipe) return servicePipe
   if (process.platform === 'win32') {
     const isAdmin = getSessionAdminStatus()
     const sessionId = process.env.SESSIONNAME || process.env.USERNAME || 'default'
@@ -435,6 +445,7 @@ export const getMihomoIpcPath = (): string => {
 
 // 核心配置接口
 interface CoreConfig {
+  windowsService: boolean
   corePath: string
   workDir: string
   safePath?: string
@@ -519,11 +530,18 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
     await validateWindowsPipeAccess(ipcPath)
   }
 
-  const startupMode: CoreStartupMode = coreStartupMode === 'post-up' ? 'post-up' : 'log'
+  const windowsService =
+    process.platform === 'win32' &&
+    !getSessionAdminStatus() &&
+    Boolean(tun?.enable) &&
+    (await canUseWindowsService(core))
+  const startupMode: CoreStartupMode =
+    !windowsService && coreStartupMode === 'post-up' ? 'post-up' : 'log'
   const startupHook =
     !detached && startupMode === 'post-up' ? await createCoreStartupHook() : undefined
 
   return {
+    windowsService,
     corePath: mihomoCorePath(core),
     workDir: diffWorkDir ? mihomoProfileWorkDir(current) : mihomoWorkDir(),
     safePath: diffWorkDir ? mihomoWorkDir() : undefined,
@@ -541,7 +559,7 @@ async function prepareCore(detached: boolean, skipStop = false): Promise<CoreCon
 }
 
 // 启动核心进程
-function spawnCoreProcess(config: CoreConfig): ChildProcess {
+async function spawnCoreProcess(config: CoreConfig): Promise<ChildProcess> {
   const {
     corePath,
     workDir,
@@ -562,11 +580,13 @@ function spawnCoreProcess(config: CoreConfig): ChildProcess {
     managerLogger.info(`Core startup mode: ${startupMode}`)
   }
 
-  const proc = spawn(corePath, args, {
-    detached,
-    stdio: detached ? 'ignore' : undefined,
-    env: buildCoreEnv(safePath, ageSecretKey)
-  })
+  const proc = config.windowsService
+    ? await spawnWindowsServiceCore(config)
+    : spawn(corePath, args, {
+        detached,
+        stdio: detached ? 'ignore' : undefined,
+        env: buildCoreEnv(safePath, ageSecretKey)
+      })
 
   if (process.platform === 'win32' && proc.pid) {
     os.setPriority(
@@ -832,7 +852,7 @@ async function startCoreInternal(detached = false, skipStop = false): Promise<Co
       runtimeGeneration = beginCoreRuntimeStart()
     }
     const hookWaiter = config.startupHook ? createCoreHookWaiter(config.startupHook) : undefined
-    const proc = spawnCoreProcess(config)
+    const proc = await spawnCoreProcess(config)
     hookWaiter?.attachProcess(proc)
     child = proc
     startCoreProcessWatchdog(proc, detached)
@@ -917,6 +937,8 @@ async function stopCoreInternal(
 
   const stoppedChild = stopCoreProcessAndStreams(cancelStartup, false, preserveRuntimeState)
 
+  await stopWindowsServiceCore()
+
   try {
     await ensureCoreProcessExited(stoppedChild)
   } catch (error) {
@@ -989,6 +1011,7 @@ export async function stopCoreForExit(): Promise<void> {
   await Promise.allSettled([
     recoverDNS({ force: true, timeout: 750 }),
     cleanupStoppedCoreResources(),
+    stopWindowsServiceCore(),
     // 确认退出后才撤 watchdog；确认失败时留着它，让它在主进程退出时补 kill -9。
     ensureCoreProcessExited(stoppedChild).then(() => stopCoreProcessWatchdog(stoppedChild?.pid))
   ])
@@ -1098,6 +1121,7 @@ export function cancelSystemResumeReload(): void {
 export async function keepCoreAlive(): Promise<boolean> {
   try {
     await startCore(true)
+    if (isWindowsServiceActive()) return true
     if (child?.pid) {
       await writeFile(path.join(dataDir(), 'core.pid'), child.pid.toString())
     }

@@ -1,3 +1,4 @@
+import { validateThemeBackground, type ThemeBackground } from './theme-media'
 export const DEX_COLOR_KEYS = [
   'bg',
   'surface',
@@ -19,7 +20,7 @@ export interface DexTheme {
   radius: number
   colors: Record<DexColorKey, string>
   fontFamily?: string
-  background?: { type: 'solid' | 'gradient'; colors: string[]; angle?: number }
+  background?: ThemeBackground
 }
 export interface DexThemeCatalog {
   builtins: DexTheme[]
@@ -40,7 +41,13 @@ export const DEX_THEME_ACTIONS = [
   'publish',
   'preview',
   'cancelPreview',
-  'installCloud'
+  'installCloud',
+  'reviewPublication',
+  'editPublication',
+  'importMedia',
+  'loadMedia',
+  'pruneMedia',
+  'activeBackground'
 ] as const
 export type DexThemeAction = (typeof DEX_THEME_ACTIONS)[number]
 
@@ -91,18 +98,7 @@ export function validateDexTheme(input: unknown): DexTheme {
   )
     throw new Error('字体名称需要 1–100 个字母、数字或常用文字，不接受 CSS 代码')
   if (value.background !== undefined) {
-    const bg = value.background as DexTheme['background']
-    if (
-      !bg ||
-      !['solid', 'gradient'].includes(bg.type) ||
-      Object.keys(bg).some((key) => !['type', 'colors', 'angle'].includes(key)) ||
-      !Array.isArray(bg.colors) ||
-      bg.colors.length < (bg.type === 'solid' ? 1 : 2) ||
-      bg.colors.length > (bg.type === 'solid' ? 1 : 4) ||
-      bg.colors.some((c) => typeof c !== 'string' || !/^#[0-9a-f]{6}$/i.test(c)) ||
-      (bg.angle !== undefined && (!Number.isFinite(bg.angle) || bg.angle < 0 || bg.angle > 360))
-    )
-      throw new Error('背景需要安全的纯色或渐变参数')
+    validateThemeBackground(value.background)
   }
   return structuredClone(input) as DexTheme
 }
@@ -218,8 +214,9 @@ export function dexThemeCss(input: unknown): string {
         .join(',')}, sans-serif;`
     : ''
   const bg = theme.background
-  const background = bg
-    ? `background: ${bg.type === 'solid' || bg.colors.length === 1 ? bg.colors[0] : `linear-gradient(${bg.angle ?? 135}deg,${bg.colors.join(',')})`};`
-    : ''
-  return `/* D.E.X ${theme.id} */\n:root, html.light, html.dark, .light, .dark {\n  ${properties.join('\n  ')}\n}\nbody { ${font} ${background} }\n`
+  const background =
+    bg && (bg.type === 'solid' || bg.type === 'gradient')
+      ? `background: ${bg.type === 'solid' || bg.colors.length === 1 ? bg.colors[0] : `linear-gradient(${bg.angle ?? 135}deg,${bg.colors.join(',')})`};`
+      : ''
+  return `/* D.E.X ${theme.id} */\n:root, html.light, html.dark, .light, .dark {\n  ${properties.join('\n  ')}\n}\nbody { ${font} ${background} }\n${bg ? '.dex-shell,.dex-main { background: transparent !important; }' : ''}\n`
 }

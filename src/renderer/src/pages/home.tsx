@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import {
   Button,
   Drawer,
@@ -36,6 +36,11 @@ import {
   updateTrayIcon
 } from '@renderer/utils/ipc'
 import '../assets/navio.css'
+import BaseConfirmModal from '@renderer/components/base/base-confirm-modal'
+import {
+  recommendationCandidates,
+  recommendMeasuredNode
+} from '../../../shared/node-recommendation'
 
 function bytes(value: number): string {
   if (!Number.isFinite(value) || value < 0) return '—'
@@ -58,6 +63,12 @@ export default function Home(): React.JSX.Element {
   const [testing, setTesting] = useState(false)
   const [favoritesOnly, setFavoritesOnly] = useState(false)
   const [delays, setDelays] = useState<Record<string, number | null>>({})
+  const [recommendation, setRecommendation] = useState<{
+    name: string
+    delay: number
+    favorite: boolean
+    context: string
+  }>()
   const [traffic, setTraffic] = useState({ up: 0, down: 0 })
   const [samples, setSamples] = useState<number[]>(Array(40).fill(0))
   const mode = controledMihomoConfig?.mode ?? 'rule'
@@ -77,6 +88,17 @@ export default function Home(): React.JSX.Element {
       (!favoritesOnly || favorites.includes(node.name))
   )
   const current = group?.all.find((node) => node.name === group.now)
+  const recommendationContext = JSON.stringify([
+    profile?.id,
+    mode,
+    group?.name,
+    group?.now,
+    group?.type,
+    group?.all.map((node) => node.name)
+  ])
+  const contextRef = useRef(recommendationContext)
+  contextRef.current = recommendationContext
+  useEffect(() => setRecommendation(undefined), [recommendationContext])
   const currentDelay = current ? (delays[current.name] ?? current.history.at(-1)?.delay) : undefined
   const unhealthy =
     current &&
@@ -129,16 +151,18 @@ export default function Home(): React.JSX.Element {
     }
   }
 
-  const selectNode = async (name: string): Promise<void> => {
-    if (!group) return
+  const selectNode = async (name: string): Promise<boolean> => {
+    if (!group) return false
     try {
       await mihomoChangeProxy(group.name, name)
       if (appConfig?.autoCloseConnection !== false) await mihomoCloseAllConnections(group.name)
       await mutate()
       window.electron.ipcRenderer.send('updateTrayMenu')
       toast.success(`已切换至 ${name}`)
+      return true
     } catch (error) {
       toast.error(String(error))
+      return false
     }
   }
 
@@ -163,6 +187,44 @@ export default function Home(): React.JSX.Element {
       })
     )
     setTesting(false)
+  }
+  const findRecommendation = async (): Promise<void> => {
+    if (!group || group.type !== 'Selector' || testing) return
+    const context = recommendationContext
+    const queue = recommendationCandidates(group.all, group.now)
+    const measured: Record<string, number | null> = {}
+    setTesting(true)
+    try {
+      await Promise.all(
+        Array.from({ length: Math.min(5, queue.length) }, async () => {
+          while (queue.length && contextRef.current === context) {
+            const node = queue.shift()
+            if (!node) break
+            try {
+              const result = await mihomoProxyDelay(node.name, group.testUrl)
+              measured[node.name] =
+                typeof result.delay === 'number' && result.delay > 0 ? result.delay : null
+            } catch {
+              measured[node.name] = null
+            }
+          }
+        })
+      )
+      if (contextRef.current !== context) {
+        toast.error('当前配置或策略组已变化，请重新查找可用节点。')
+        return
+      }
+      setDelays((previous) => ({ ...previous, ...measured }))
+      const candidate = recommendMeasuredNode(group.all, group.now, measured, favorites)
+      if (!candidate) {
+        setOpen(true)
+        toast.error('当前策略组没有检测成功的其他节点，未更改节点。')
+        return
+      }
+      setRecommendation({ ...candidate, context })
+    } finally {
+      setTesting(false)
+    }
   }
 
   return (
@@ -235,12 +297,16 @@ export default function Home(): React.JSX.Element {
             <Button
               size="sm"
               variant="flat"
+              isLoading={testing}
               onPress={() => {
-                setOpen(true)
-                void testNodes()
+                if (group?.type === 'Selector') void findRecommendation()
+                else {
+                  setOpen(true)
+                  void testNodes()
+                }
               }}
             >
-              查找可用节点
+              {group?.type === 'Selector' ? '推荐可用节点' : '查找可用节点'}
             </Button>
           </div>
         )}
@@ -291,6 +357,31 @@ export default function Home(): React.JSX.Element {
           </button>
         </footer>
       </div>
+      {recommendation && (
+        <BaseConfirmModal
+          isOpen
+          isLoading={busy}
+          title="切换到推荐节点？"
+          content={`当前策略组「${group?.name}」推荐 ${recommendation.name}，本次测速 ${recommendation.delay} ms${recommendation.favorite ? '，优先选择了你的收藏' : '，是本次检测中延迟最低的可用节点'}。确认后才切换，出口 IP 可能改变。`}
+          onCancel={() => setRecommendation(undefined)}
+          onConfirm={async () => {
+            if (
+              recommendation.context !== contextRef.current ||
+              !group?.all.some((node) => node.name === recommendation.name)
+            ) {
+              setRecommendation(undefined)
+              toast.error('当前策略组已变化，请重新查找。')
+              return
+            }
+            setBusy(true)
+            try {
+              if (await selectNode(recommendation.name)) setRecommendation(undefined)
+            } finally {
+              setBusy(false)
+            }
+          }}
+        />
+      )}
       <Drawer isOpen={open} onOpenChange={setOpen} size="md" placement="right">
         <DrawerContent>
           <DrawerHeader className="flex flex-col gap-1">

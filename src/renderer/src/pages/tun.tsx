@@ -12,6 +12,7 @@ import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { MdDeleteForever } from 'react-icons/md'
 import { useTranslation } from 'react-i18next'
 import { FeatureIntro, HelpTip } from '@renderer/components/dex/feature-help'
+import WindowsServiceSettings from '@renderer/components/settings/windows-service'
 import { DEFAULT_MIHOMO_TUN_CONFIG, getDefaultMihomoTunDevice } from '../../../shared/appConfig'
 
 const Tun: React.FC = () => {
@@ -136,6 +137,7 @@ const Tun: React.FC = () => {
         }
       >
         <FeatureIntro topic="tun" />
+        {platform === 'win32' && <WindowsServiceSettings />}
         <SettingCard className="tun-settings">
           {platform === 'win32' && (
             <SettingItem title={t('tun.firewall.title')} divider>

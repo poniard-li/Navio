@@ -6,16 +6,27 @@ import {
   DEX_THEME_ACTIONS,
   dexThemeCss,
   validateDexTheme,
+  type DexTheme,
   type DexThemeCatalog
 } from '../../shared/dex-theme'
 import { dataDir } from '../utils/dirs'
 import { mainWindow } from '../window'
 import { getAppConfig, patchAppConfig } from '../config'
+import { themeAssets, type ThemeAsset } from '../../shared/theme-media'
 import { applyTheme, writeTheme } from './theme'
 import { dexAccountRequest, dexServerUrl, setDexServerUrl } from './dex-account'
+import {
+  ensureThemeAssets,
+  importThemeMedia,
+  importThemePackage,
+  exportThemePackage,
+  readThemeAsset,
+  pruneThemeMedia
+} from './theme-media'
 
 let library: ThemeService | undefined
 let previewKey: string | undefined
+let previewTheme: DexTheme | undefined
 let operationQueue: Promise<unknown> = Promise.resolve()
 function service(): ThemeService {
   library ??= new ThemeService({
@@ -29,6 +40,25 @@ async function clearPreview(): Promise<void> {
   if (previewKey && mainWindow && !mainWindow.isDestroyed())
     await mainWindow.webContents.removeInsertedCSS(previewKey).catch(() => {})
   previewKey = undefined
+  previewTheme = undefined
+  mainWindow?.webContents.send('dexThemeBackground', null)
+}
+async function downloadAsset(asset: ThemeAsset): Promise<Uint8Array> {
+  return (await dexAccountRequest(
+    `/api/v1/theme-assets/${asset.sha256}`,
+    { signal: AbortSignal.timeout(120000) },
+    true,
+    asset.size
+  )) as Uint8Array
+}
+async function uploadAssets(theme: DexTheme): Promise<void> {
+  for (const asset of themeAssets(theme))
+    await dexAccountRequest(`/api/v1/theme-assets/${asset.sha256}`, {
+      method: 'PUT',
+      headers: { 'Content-Type': asset.mime },
+      body: new Uint8Array(await readThemeAsset(asset)),
+      signal: AbortSignal.timeout(120000)
+    })
 }
 async function catalog(): Promise<DexThemeCatalog> {
   const result = await service().list()
@@ -39,11 +69,67 @@ async function catalog(): Promise<DexThemeCatalog> {
 }
 async function execute(action: string, payload: Record<string, unknown>): Promise<unknown> {
   if (action === 'list') return catalog()
+  if (action === 'activeBackground') {
+    if (previewTheme) return previewTheme
+    const selected = /^dex-([a-z][a-z0-9-]{2,47})\.css$/.exec(
+      (await getAppConfig()).customTheme || ''
+    )?.[1]
+    return selected
+      ? service()
+          .find(selected)
+          .catch(() => null)
+      : null
+  }
+  if (action === 'importMedia') return importThemeMedia(payload.kind)
+  if (action === 'pruneMedia')
+    return {
+      removed: await pruneThemeMedia([
+        ...(await service().list()).local,
+        ...(previewTheme ? [previewTheme] : [])
+      ])
+    }
+  if (action === 'loadMedia') {
+    const theme = validateDexTheme(payload.theme)
+    await ensureThemeAssets(theme, downloadAsset)
+    return { ok: true }
+  }
+  if (action === 'import') {
+    const theme = await importThemePackage()
+    return theme ? service().save({ theme }) : null
+  }
+  if (action === 'export') {
+    if (typeof payload.id !== 'string') throw new Error('请选择主题')
+    const theme = validateDexTheme(await service().find(payload.id))
+    if (!themeAssets(theme).length) return service().handle('themes.export', payload)
+    await ensureThemeAssets(theme, downloadAsset)
+    return exportThemePackage(theme)
+  }
+  if (action === 'editPublication' || action === 'reviewPublication') {
+    const publications = (await dexAccountRequest('/api/v1/account/themes')) as {
+      themes: { id: string; theme: unknown; status: string }[]
+    }
+    const item = publications.themes.find((entry) => entry.id === payload.id)
+    if (!item) throw new Error('只能修改或复核自己的作品')
+    const remote = validateDexTheme(item.theme)
+    await ensureThemeAssets(remote, downloadAsset)
+    if (action === 'editPublication') {
+      const local = (await service().list()).local.find((theme) => theme.id === remote.id)
+      return local || service().save({ theme: remote })
+    }
+    if (item.status !== 'removed') throw new Error('此作品不需要提交复核，或已经在等待复核')
+    const theme = validateDexTheme(await service().find(remote.id))
+    await uploadAssets(theme)
+    return dexAccountRequest('/api/v1/themes', {
+      method: 'POST',
+      body: JSON.stringify({ theme, submitReview: true })
+    })
+  }
   if (action === 'installCloud') {
     const id = payload.id
     if (typeof id !== 'string' || !/^[\w-]{1,128}$/.test(id)) throw new Error('主题标识无效')
     const result = (await dexAccountRequest(`/api/v1/themes/${id}`)) as { item: { theme: unknown } }
     const theme = validateDexTheme(result.item.theme)
+    await ensureThemeAssets(theme, downloadAsset)
     theme.id = `cloud-${createHash('sha256')
       .update(`${await dexServerUrl()}/${id}`)
       .digest('hex')
@@ -56,10 +142,14 @@ async function execute(action: string, payload: Record<string, unknown>): Promis
     return { ok: true }
   }
   if (action === 'preview') {
-    const css = dexThemeCss(payload.theme)
+    const theme = validateDexTheme(payload.theme)
+    const css = dexThemeCss(theme)
+    await ensureThemeAssets(theme)
     await clearPreview()
     if (mainWindow && !mainWindow.isDestroyed())
       previewKey = await mainWindow.webContents.insertCSS(css)
+    previewTheme = theme
+    mainWindow?.webContents.send('dexThemeBackground', theme)
     return { ok: true }
   }
   if (action === 'apply') {
@@ -70,6 +160,7 @@ async function execute(action: string, payload: Record<string, unknown>): Promis
       await service().save({ theme: validateDexTheme(remote) })
     }
     const theme = validateDexTheme(await service().find(payload.id))
+    await ensureThemeAssets(theme, downloadAsset)
     const filename = `dex-${theme.id}.css`
     const config = await getAppConfig()
     const previous = { customTheme: config.customTheme || 'default.css', appTheme: config.appTheme }
@@ -85,10 +176,13 @@ async function execute(action: string, payload: Record<string, unknown>): Promis
       throw error
     }
     mainWindow?.webContents.send('appConfigUpdated')
+    mainWindow?.webContents.send('dexThemeBackground', null)
     return theme
   }
   if (action === 'save') {
-    return service().save({ theme: validateDexTheme(payload.theme) })
+    const theme = validateDexTheme(payload.theme)
+    await ensureThemeAssets(theme, downloadAsset)
+    return service().save({ theme })
   }
   if (action === 'configure') {
     if (typeof payload.url !== 'string') throw new Error('账号服务地址无效')
@@ -131,6 +225,7 @@ async function execute(action: string, payload: Record<string, unknown>): Promis
     const theme = validateDexTheme(await service().find(payload.id))
     if ((await service().list()).builtins.some((item) => item.id === theme.id))
       throw new Error('请先另存为自己的主题再发布')
+    await uploadAssets(theme)
     const result = (await dexAccountRequest('/api/v1/themes', {
       method: 'POST',
       body: JSON.stringify({ theme })

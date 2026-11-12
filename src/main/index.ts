@@ -41,6 +41,7 @@ import {
 import { configureAppPaths } from './utils/dirs'
 import { setTrafficUsageEnabled } from './traffic/recorder'
 import { prepareStartupConnection, restoreStartupProxy } from './resolve/startup-connection'
+import { registerThemeMediaScheme, handleThemeMediaScheme } from './resolve/theme-media'
 
 const testMode = process.env.DEX_TEST_MODE === '1'
 
@@ -90,6 +91,7 @@ async function ensureSupportedWindowsPowerShell(): Promise<boolean> {
 }
 
 configureAppPaths()
+registerThemeMediaScheme()
 subscribeAppConfig((config) => setTrafficUsageEnabled(config.enableTrafficLogger === true))
 
 const mainLogger = createLogger('Main')
@@ -253,6 +255,7 @@ app
   .whenReady()
   .then(async () => {
     electronApp.setAppUserModelId('studio.dex.desktop')
+    handleThemeMediaScheme()
 
     const { appConfig, adminPromise } = await initPromise
     await prepareStartupConnection()

@@ -1,7 +1,8 @@
-import { readFile, unlink } from 'fs/promises'
+import { mkdir, readFile, unlink } from 'fs/promises'
 import { join } from 'path'
+import { createHash } from 'crypto'
 import { safeStorage, shell } from 'electron'
-import { dataDir } from '../utils/dirs'
+import { dataDir, dexSharedAccountDir } from '../utils/dirs'
 import { atomicWriteFile, WriteQueue } from '../utils/safeFile'
 import type {
   DexUser,
@@ -13,6 +14,14 @@ interface AccountVault {
   serverUrl: string
   accessToken: string
   user: DexUser
+  ssoToken?: string
+}
+interface SharedAccountVault {
+  serverUrl: string
+  ssoToken: string
+  expiresAt: string
+  user: Pick<DexUser, 'id' | 'username' | 'displayName'>
+  sourceAppId: string
 }
 const queue = new WriteQueue()
 const attempts = new Map<string, { serverUrl: string; expires: number; revision: number }>()
@@ -25,6 +34,70 @@ let userRevision = 0
 const defaultServer = 'https://navio.mydex.top'
 const vaultPath = (): string => join(dataDir(), 'dex-account.vault')
 const settingsPath = (): string => join(dataDir(), 'dex-account-server.json')
+const sharedVaultPath = (server: string): string =>
+  join(dexSharedAccountDir(), createHash('sha256').update(server).digest('hex') + '.vault')
+
+async function readSharedVault(server: string): Promise<SharedAccountVault | undefined> {
+  try {
+    if (!safeStorage.isEncryptionAvailable()) return undefined
+    const value = JSON.parse(
+      safeStorage.decryptString(await readFile(sharedVaultPath(server)))
+    ) as SharedAccountVault
+    if (
+      value.serverUrl !== server ||
+      !/^[A-Za-z0-9_-]{43}$/.test(value.ssoToken) ||
+      !value.user?.id ||
+      !value.user?.username ||
+      !(Date.parse(value.expiresAt) > Date.now())
+    )
+      return undefined
+    return value
+  } catch {
+    return undefined
+  }
+}
+
+async function storeLoginVault(
+  value: AccountVault,
+  revision: number,
+  result: { ssoToken?: string; ssoExpiresAt?: string }
+): Promise<boolean> {
+  const { ssoToken, ssoExpiresAt } = result
+  const shared =
+    typeof ssoToken === 'string' &&
+    /^[A-Za-z0-9_-]{43}$/.test(ssoToken) &&
+    typeof ssoExpiresAt === 'string' &&
+    Date.parse(ssoExpiresAt) > Date.now()
+      ? { ssoToken, expiresAt: ssoExpiresAt }
+      : undefined
+  if (!(await storeVault({ ...value, ...(shared ? { ssoToken: result.ssoToken } : {}) }, revision)))
+    return false
+  if (shared)
+    await queue
+      .run(async () => {
+        if (revision !== accountRevision || value.serverUrl !== (await dexServerUrl())) return
+        const record: SharedAccountVault = {
+          serverUrl: value.serverUrl,
+          ssoToken: shared.ssoToken,
+          expiresAt: shared.expiresAt,
+          user: {
+            id: value.user.id,
+            username: value.user.username,
+            displayName: value.user.displayName
+          },
+          sourceAppId: 'navio'
+        }
+        await mkdir(dexSharedAccountDir(), { recursive: true, mode: 0o700 })
+        await atomicWriteFile(
+          sharedVaultPath(value.serverUrl),
+          safeStorage.encryptString(JSON.stringify(record))
+        )
+      })
+      .catch(() => {
+        /* An unavailable shared directory must not discard the app's login. */
+      })
+  return revision === accountRevision
+}
 
 export function validateDexServer(value: string): string {
   const url = new URL(value)
@@ -82,7 +155,8 @@ async function storeVault(
 export async function dexAccountRequest(
   endpoint: string,
   options: RequestInit = {},
-  authenticated = true
+  authenticated = true,
+  responseBytesLimit?: number
 ): Promise<unknown> {
   const server = await dexServerUrl()
   const target = new URL(endpoint, server)
@@ -97,13 +171,14 @@ export async function dexAccountRequest(
     throw new Error('账号请求必须使用当前服务的 API 路径。')
   const vault = authenticated ? await readVault() : undefined
   if (authenticated && !vault) throw new Error('请先登录 D.E.X 账号。')
+  if (server !== (await dexServerUrl())) throw new Error('账号服务已变化，请重试。')
   const headers = new Headers(options.headers)
   if (!headers.has('Content-Type')) headers.set('Content-Type', 'application/json')
   if (vault) headers.set('Authorization', `Bearer ${vault.accessToken}`)
   const response = await fetch(target.href, {
     ...options,
     redirect: 'error',
-    signal: AbortSignal.timeout(12000),
+    signal: options.signal || AbortSignal.timeout(12000),
     headers
   })
   if (!response.ok) {
@@ -116,6 +191,35 @@ export async function dexAccountRequest(
       new Error(data.message || detail || `账号服务暂不可用（${response.status}）`),
       { status: response.status }
     )
+  }
+  if (responseBytesLimit !== undefined) {
+    if (
+      !Number.isSafeInteger(responseBytesLimit) ||
+      responseBytesLimit < 1 ||
+      responseBytesLimit > 32 * 1024 * 1024
+    )
+      throw new Error('媒体下载大小限制无效')
+    if (Number(response.headers.get('content-length')) > responseBytesLimit)
+      throw new Error('媒体响应超过大小限制')
+    const reader = response.body?.getReader()
+    if (!reader) throw new Error('媒体响应为空')
+    const chunks: Uint8Array[] = []
+    let size = 0
+    try {
+      while (true) {
+        const { value, done } = await reader.read()
+        if (done) break
+        size += value.byteLength
+        if (size > responseBytesLimit) {
+          await reader.cancel()
+          throw new Error('媒体响应超过大小限制')
+        }
+        chunks.push(value)
+      }
+    } finally {
+      reader.releaseLock()
+    }
+    return Buffer.concat(chunks)
   }
   return response.status === 204 ? {} : response.json()
 }
@@ -228,7 +332,13 @@ export async function pollDexLogin(deviceCode: string): Promise<{
     attempts.delete(deviceCode)
     return { status: 'expired' }
   }
-  let data: { status?: string; accessToken?: string; user?: DexUser }
+  let data: {
+    status?: string
+    accessToken?: string
+    user?: DexUser
+    ssoToken?: string
+    ssoExpiresAt?: string
+  }
   try {
     data = (await dexAccountRequest(
       '/api/v1/device/poll',
@@ -260,9 +370,10 @@ export async function pollDexLogin(deviceCode: string): Promise<{
     const revision = ++accountRevision
     attempts.clear()
     if (
-      !(await storeVault(
+      !(await storeLoginVault(
         { serverUrl: attempt.serverUrl, accessToken: data.accessToken, user: data.user },
-        revision
+        revision,
+        data
       ))
     )
       return { status: 'expired' }
@@ -283,12 +394,18 @@ export async function logoutDexAccount(): Promise<void> {
   accountRevision++
   attempts.clear()
   oauthAttempts.clear()
+  const previous = await readVault()
   try {
     await dexAccountRequest('/api/v1/auth/logout', { method: 'POST', body: '{}' })
   } catch {
     /* Local logout works offline. */
   }
   await queue.run(async () => {
+    if (previous?.ssoToken) {
+      const shared = await readSharedVault(previous.serverUrl)
+      if (shared?.ssoToken === previous.ssoToken)
+        await unlink(sharedVaultPath(previous.serverUrl)).catch(() => {})
+    }
     await unlink(vaultPath()).catch(() => {})
   })
 }
@@ -309,6 +426,30 @@ export async function dexAccountAction(
 ): Promise<unknown> {
   if (!payload || typeof payload !== 'object' || Array.isArray(payload))
     throw new Error('账号请求格式无效。')
+  let sharedToken: string | undefined
+  let sharedOrigin: string | undefined
+  const initialRevision = accountRevision
+  if (['sso-info', 'sso-continue', 'sso-forget'].includes(action)) {
+    const server = await dexServerUrl()
+    const shared = await readSharedVault(server)
+    if (initialRevision !== accountRevision || server !== (await dexServerUrl()))
+      throw new Error('账号服务已变化，请刷新登录页面。')
+    if (action === 'sso-forget') {
+      await queue.run(() => unlink(sharedVaultPath(server)).catch(() => {}))
+      return { ok: true }
+    }
+    if (!shared) {
+      if (action === 'sso-info') return null
+      throw new Error('已有账号凭据已失效，请重新登录。')
+    }
+    if (
+      action === 'sso-continue' &&
+      (payload.confirmed !== true || payload.expectedUserId !== shared.user.id)
+    )
+      throw new Error('请重新核对已有账号，再选择继续。')
+    sharedToken = shared.ssoToken
+    sharedOrigin = server
+  }
   const routes: Record<string, [string, string, boolean]> = {
     status: ['/status', 'GET', false],
     login: ['/desktop/auth/login', 'POST', false],
@@ -324,6 +465,16 @@ export async function dexAccountAction(
     password: ['/account/password', 'POST', true],
     contact: ['/account/contact', 'POST', true],
     security: ['/account/security', 'GET', true],
+    'sso-info': ['/desktop/sso/info', 'POST', false],
+    'sso-enable': ['/account/sso/credential', 'POST', true],
+    'sso-continue': ['/desktop/sso/continue', 'POST', false],
+    products: ['/account/products', 'GET', true],
+    'mystery-verify': ['/account/mystery/verify', 'POST', true],
+    'mystery-link': ['/account/mystery/link', 'POST', true],
+    'mystery-unlink': ['/account/mystery', 'DELETE', true],
+    'recovery-info': ['/desktop/recovery/info', 'POST', false],
+    'recovery-request': ['/desktop/recovery/request', 'POST', false],
+    'recovery-complete': ['/desktop/recovery/complete', 'POST', false],
     'my-themes': ['/account/themes', 'GET', true],
     'favorite-themes': ['/account/favorites', 'GET', true]
   }
@@ -390,7 +541,9 @@ export async function dexAccountAction(
   if (!route) throw new Error('不支持此账号操作。')
   const [path, method, authenticated] = route
   const serverUrl = await dexServerUrl()
-  const signingIn = ['login', 'register', 'otp-login'].includes(action)
+  if (sharedOrigin && (sharedOrigin !== serverUrl || initialRevision !== accountRevision))
+    throw new Error('账号服务已变化，请刷新登录页面。')
+  const signingIn = ['login', 'register', 'otp-login', 'sso-continue'].includes(action)
   const revision = signingIn ? ++accountRevision : accountRevision
   const mutationVault = unlinking ? await readVault() : undefined
   if (unlinking && !mutationVault) throw new Error('请先登录 D.E.X 账号。')
@@ -403,8 +556,15 @@ export async function dexAccountAction(
       headers: { 'x-dex-client': 'desktop' },
       ...(securityProof
         ? { body: JSON.stringify(securityProof) }
-        : method !== 'GET' && method !== 'DELETE'
-          ? { body: JSON.stringify({ ...payload, deviceName: 'Navio · Windows' }) }
+        : method !== 'GET' && (method !== 'DELETE' || action === 'mystery-unlink')
+          ? {
+              body: JSON.stringify({
+                ...payload,
+                ...(sharedToken ? { ssoToken: sharedToken } : {}),
+                appId: 'navio',
+                deviceName: 'Navio · Windows'
+              })
+            }
           : {})
     },
     authenticated
@@ -420,14 +580,49 @@ export async function dexAccountAction(
       throw new Error('登录状态已更改，请刷新账号状态。')
     return { ok: true, user: result.user }
   }
+  if (action === 'sso-enable') {
+    const current = await readVault()
+    const result = data as { ssoToken?: string; expiresAt?: string }
+    if (
+      !current ||
+      revision !== accountRevision ||
+      serverUrl !== (await dexServerUrl()) ||
+      typeof result.ssoToken !== 'string' ||
+      !/^[A-Za-z0-9_-]{43}$/.test(result.ssoToken) ||
+      !result.expiresAt
+    )
+      throw new Error('登录状态已变化，请重新打开账号管理。')
+    if (
+      !(await storeLoginVault(current, revision, {
+        ssoToken: result.ssoToken,
+        ssoExpiresAt: result.expiresAt
+      }))
+    )
+      throw new Error('登录状态已变化，请重新打开账号管理。')
+    return { ok: true }
+  }
+  if (
+    action === 'sso-info' &&
+    (revision !== accountRevision || serverUrl !== (await dexServerUrl()))
+  )
+    throw new Error('账号服务已变化，请刷新登录页面。')
   if (!signingIn) return data
-  const result = data as { accessToken?: string; user?: DexUser }
+  const result = data as {
+    accessToken?: string
+    user?: DexUser
+    ssoToken?: string
+    ssoExpiresAt?: string
+  }
   if (typeof result.accessToken !== 'string' || !result.accessToken || !result.user?.id)
     throw new Error('账号服务没有返回有效的登录凭据。')
   if (revision !== accountRevision || serverUrl !== (await dexServerUrl()))
     throw new Error('登录状态已更改，请重新登录。')
   if (
-    !(await storeVault({ serverUrl, accessToken: result.accessToken, user: result.user }, revision))
+    !(await storeLoginVault(
+      { serverUrl, accessToken: result.accessToken, user: result.user },
+      revision,
+      result
+    ))
   )
     throw new Error('登录状态已更改，请重新登录。')
   return { status: 'online', serverUrl, user: result.user }
@@ -510,6 +705,8 @@ export async function finishDexOAuth(
     provider?: string
     suggestedEmail?: string
     emailVerified?: boolean
+    ssoToken?: string
+    ssoExpiresAt?: string
   }
   try {
     data = (await dexAccountRequest(
@@ -557,9 +754,10 @@ export async function finishDexOAuth(
     attempts.clear()
     oauthAttempts.clear()
     if (
-      !(await storeVault(
+      !(await storeLoginVault(
         { serverUrl: attempt.serverUrl, accessToken: data.accessToken, user: data.user },
-        revision
+        revision,
+        data
       ))
     )
       return { status: 'expired' }

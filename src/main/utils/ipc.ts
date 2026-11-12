@@ -85,6 +85,8 @@ import {
   showErrorDialog
 } from '../core/manager'
 import { triggerSysProxy } from '../sys/sysproxy'
+import { ensureWindowsTunAccess } from '../core/permissions'
+import { getWindowsServiceStatus, manageWindowsService } from '../core/windows-service'
 import { checkUpdate, downloadAndInstallUpdate } from '../resolve/autoUpdater'
 import {
   getFilePath,
@@ -106,6 +108,8 @@ import {
   webdavRestore,
   exportLocalBackup,
   importLocalBackup,
+  previewBackupExternalFiles,
+  approveBackupExternalFiles,
   reinitScheduler
 } from '../resolve/backup'
 import { getInterfaces } from '../sys/interface'
@@ -356,7 +360,10 @@ const asyncHandlers: Record<string, AsyncFn> = {
   setProfileStr: saveProfileEdits,
   getProfileChanges: async (id: string) =>
     (await import('../config/profile-local')).getProfileChanges(id),
-  resolveProfileChanges: async (id: string, resolution: 'keep-local' | 'use-incoming') => {
+  resolveProfileChanges: async (
+    id: string,
+    resolution: import('../../shared/profile-patch').ProfileResolution
+  ) => {
     const item = await getProfileItem(id)
     if (!item) throw new Error('配置不存在')
     const { validateProfileCandidate } = await import('../config/profile')
@@ -419,6 +426,9 @@ const asyncHandlers: Record<string, AsyncFn> = {
   startMonitor,
   quitWithoutCore,
   // System
+  ensureWindowsTunAccess,
+  getWindowsServiceStatus,
+  manageWindowsService,
   triggerSysProxy,
   checkTunPermissions,
   grantTunPermissions,
@@ -440,6 +450,8 @@ const asyncHandlers: Record<string, AsyncFn> = {
   installSpecificMihomoCore,
   clearMihomoVersionCache,
   // Backup
+  previewBackupExternalFiles,
+  approveBackupExternalFiles,
   webdavBackup,
   webdavRestore,
   listWebdavBackups,

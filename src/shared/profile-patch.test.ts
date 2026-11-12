@@ -43,4 +43,27 @@ describe('local edits across subscription refresh', () => {
       ).conflicts
     ).toEqual(['/'])
   })
+  it('resolves escaped names and deletion conflicts independently', () => {
+    const base = {
+      proxies: [
+        { name: 'A]/x', port: 80 },
+        { name: 'B', port: 80 }
+      ]
+    }
+    const local = { proxies: [{ name: 'A]/x', port: 443 }] }
+    const incoming = {
+      proxies: [
+        { name: 'A]/x', port: 8080 },
+        { name: 'B', port: 81 }
+      ]
+    }
+    const conflicts = mergeProfileChanges(base, local, incoming).conflicts
+    expect(conflicts).toEqual(['/proxies[A%5D%2Fx]/port', '/proxies[B]'])
+    expect(
+      mergeProfileChanges(base, local, incoming, '', {
+        [conflicts[0]]: 'incoming',
+        [conflicts[1]]: 'local'
+      }).value
+    ).toEqual({ proxies: [{ name: 'A]/x', port: 8080 }] })
+  })
 })

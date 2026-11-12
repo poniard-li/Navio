@@ -12,7 +12,8 @@ import {
 } from '@heroui/react'
 import { getProfileChanges, resolveProfileChanges, type ProfileChanges } from '@renderer/utils/ipc'
 import { toast } from '../base/toast'
-import BaseConfirmModal from '../base/base-confirm-modal'
+const displayValue = (value: unknown): string =>
+  value === undefined ? '（此项已删除）' : JSON.stringify(value, null, 2)
 
 export default function ProfileChangesModal({
   id,
@@ -23,19 +24,21 @@ export default function ProfileChangesModal({
 }): React.JSX.Element {
   const [changes, setChanges] = useState<ProfileChanges>()
   const [busy, setBusy] = useState(false)
-  const [discard, setDiscard] = useState(false)
+  const [choices, setChoices] = useState<Record<string, 'local' | 'incoming'>>({})
   const [error, setError] = useState('')
   useEffect(() => {
     void getProfileChanges(id)
       .then(setChanges)
       .catch((err) => setError(String(err)))
   }, [id])
-  const resolve = async (choice: 'keep-local' | 'use-incoming'): Promise<void> => {
+  const resolve = async (): Promise<void> => {
+    if (!changes) return
     setBusy(true)
     try {
-      await resolveProfileChanges(id, choice)
+      await resolveProfileChanges(id, { revision: changes.revision, choices })
       setChanges(await getProfileChanges(id))
-      setDiscard(false)
+      setChoices({})
+      setError('')
       toast.success('冲突已处理')
     } catch (err) {
       setError(String(err))
@@ -45,7 +48,14 @@ export default function ProfileChangesModal({
   }
   return (
     <>
-      <Modal size="4xl" isOpen onClose={onClose} scrollBehavior="inside">
+      <Modal
+        size="5xl"
+        isOpen
+        onClose={busy ? undefined : onClose}
+        isDismissable={!busy}
+        hideCloseButton={busy}
+        scrollBehavior="inside"
+      >
         <ModalContent>
           <ModalHeader>本地修改与订阅更新</ModalHeader>
           <ModalBody>
@@ -67,14 +77,104 @@ export default function ProfileChangesModal({
                       ? '本地修改已独立保存'
                       : '当前没有独立的本地修改'}
                 </p>
-                {changes.conflicts.length > 0 && (
-                  <ul className="text-xs text-warning list-disc pl-5">
-                    {changes.conflicts.map((item) => (
-                      <li key={item}>{item}</li>
-                    ))}
-                  </ul>
-                )}
                 <Tabs aria-label="对照配置内容" variant="underlined">
+                  {changes.hasPending && (
+                    <Tab
+                      key="conflicts"
+                      title={`逐项确认（${Object.keys(choices).length}/${changes.details.length}）`}
+                    >
+                      <p className="text-xs text-default-500 mb-3">
+                        每项选择本地内容或本次订阅内容。确认应用前继续使用原配置，未冲突的新内容会自动合并。
+                      </p>
+                      <div className="flex gap-2 mb-4">
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          isDisabled={busy}
+                          onPress={() =>
+                            setChoices(
+                              Object.fromEntries(changes.conflicts.map((path) => [path, 'local']))
+                            )
+                          }
+                        >
+                          全部选择本地
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="flat"
+                          isDisabled={busy}
+                          onPress={() =>
+                            setChoices(
+                              Object.fromEntries(
+                                changes.conflicts.map((path) => [path, 'incoming'])
+                              )
+                            )
+                          }
+                        >
+                          全部选择订阅
+                        </Button>
+                      </div>
+                      <div className="space-y-4">
+                        {changes.details.map((item) => (
+                          <section
+                            key={item.path}
+                            className="rounded-xl border border-warning-300 p-3 space-y-3"
+                          >
+                            <h4 className="text-sm font-medium break-all">
+                              {decodeURIComponent(item.path)}
+                            </h4>
+                            <details className="text-xs text-default-500">
+                              <summary className="cursor-pointer">更新前的原始内容</summary>
+                              <pre className="overflow-auto p-2 select-text">
+                                {displayValue(item.base)}
+                              </pre>
+                            </details>
+                            <div className="grid sm:grid-cols-2 gap-3">
+                              {(['local', 'incoming'] as const).map((side) => {
+                                const value = item[side]
+                                const selected = choices[item.path] === side
+                                return (
+                                  <div
+                                    key={side}
+                                    className={`rounded-lg border p-3 ${selected ? 'border-primary bg-primary-50' : 'border-default-200'}`}
+                                  >
+                                    <Button
+                                      size="sm"
+                                      variant={selected ? 'solid' : 'flat'}
+                                      color={selected ? 'primary' : 'default'}
+                                      aria-pressed={selected}
+                                      isDisabled={busy}
+                                      onPress={() =>
+                                        setChoices((previous) => ({
+                                          ...previous,
+                                          [item.path]: side
+                                        }))
+                                      }
+                                    >
+                                      {side === 'local' ? '保留本地' : '使用本次订阅'}
+                                      {selected ? ' · 已选择' : ''}
+                                    </Button>
+                                    <pre className="mt-2 max-h-52 overflow-auto select-text text-xs leading-6 whitespace-pre-wrap break-all">
+                                      {displayValue(value)
+                                        .split('\n')
+                                        .map((line, index) => (
+                                          <span
+                                            key={index}
+                                            className={`block ${!displayValue(item.base).split('\n').includes(line) ? 'bg-warning-100 text-warning-800 dark:text-warning-300' : ''}`}
+                                          >
+                                            {line || ' '}
+                                          </span>
+                                        ))}
+                                    </pre>
+                                  </div>
+                                )
+                              })}
+                            </div>
+                          </section>
+                        ))}
+                      </div>
+                    </Tab>
+                  )}
                   <Tab key="base" title="订阅原始内容">
                     <pre className="max-h-[48vh] overflow-auto select-text p-4 rounded-lg bg-default-100 text-xs leading-6">
                       {changes.base || '无原始快照'}
@@ -99,14 +199,26 @@ export default function ProfileChangesModal({
               <>
                 <Button
                   variant="flat"
-                  color="danger"
                   isDisabled={busy}
-                  onPress={() => setDiscard(true)}
+                  onPress={async () => {
+                    try {
+                      setChanges(await getProfileChanges(id))
+                      setChoices({})
+                      setError('')
+                    } catch (err) {
+                      setError(String(err))
+                    }
+                  }}
                 >
-                  使用订阅更新，放弃全部本地修改
+                  重新读取
                 </Button>
-                <Button color="primary" isLoading={busy} onPress={() => void resolve('keep-local')}>
-                  保留本地修改并合并
+                <Button
+                  color="primary"
+                  isLoading={busy}
+                  isDisabled={changes.conflicts.some((path) => !choices[path])}
+                  onPress={() => void resolve()}
+                >
+                  确认并应用所选内容
                 </Button>
               </>
             )}
@@ -116,14 +228,6 @@ export default function ProfileChangesModal({
           </ModalFooter>
         </ModalContent>
       </Modal>
-      <BaseConfirmModal
-        isOpen={discard}
-        isLoading={busy}
-        title="使用订阅中的内容？"
-        content="此订阅的全部本地修改将被放弃，配置会完整采用待处理的订阅更新。请先在对照页面保存需要保留的内容。"
-        onCancel={() => setDiscard(false)}
-        onConfirm={() => void resolve('use-incoming')}
-      />
     </>
   )
 }

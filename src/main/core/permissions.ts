@@ -10,6 +10,13 @@ import { managerLogger } from '../utils/logger'
 import { checkAutoRun, enableAutoRun } from '../sys/autoRun'
 import i18next from '../../shared/i18n'
 import { checkAdminPrivileges } from './admin'
+import { createElevatedRestartCommand } from './windows-elevation'
+import {
+  canUseWindowsService,
+  getWindowsServiceStatus,
+  isWindowsServiceReady,
+  manageWindowsService
+} from './windows-service'
 
 const execPromise = promisify(exec)
 const execFilePromise = promisify(execFile)
@@ -57,6 +64,7 @@ let sessionAdminStatus: boolean | null = null
 export async function initAdminStatus(): Promise<void> {
   if (process.platform === 'win32' && sessionAdminStatus === null) {
     sessionAdminStatus = await checkAdminPrivileges().catch(() => false)
+    await getWindowsServiceStatus().catch(() => undefined)
   }
 }
 
@@ -75,7 +83,8 @@ export async function checkMihomoCorePermissions(): Promise<boolean> {
 
   try {
     if (process.platform === 'win32') {
-      return await checkAdminPrivileges()
+      if (await checkAdminPrivileges()) return true
+      return await canUseWindowsService(core)
     }
 
     if (process.platform === 'darwin' || process.platform === 'linux') {
@@ -265,49 +274,59 @@ export async function restartAsAdmin(forTun: boolean = true): Promise<void> {
     throw new Error('This function is only available on Windows')
   }
 
-  // 先停止 Core，避免新旧进程冲突
-  try {
-    managerLogger.info('Stopping core before admin restart...')
-    await stopCoreBeforeAdminRestart?.(true)
-    await new Promise((resolve) => setTimeout(resolve, 500))
-  } catch (error) {
-    managerLogger.warn('Failed to stop core before restart:', error)
-  }
-
   const exePath = process.execPath
   const args = process.argv.slice(1).filter((arg) => arg !== '--admin-restart-for-tun')
   const restartArgs = forTun ? [...args, '--admin-restart-for-tun'] : args
 
-  const escapedExePath = exePath.replace(/'/g, "''")
-  const argsString = restartArgs.map((arg) => arg.replace(/'/g, "''")).join("', '")
-
-  // 使用 Start-Sleep 延迟启动，确保旧进程完全退出后再启动新进程
-  const command =
-    restartArgs.length > 0
-      ? `powershell -NoProfile -Command "Start-Sleep -Milliseconds 1000; Start-Process -FilePath '${escapedExePath}' -ArgumentList '${argsString}' -Verb RunAs"`
-      : `powershell -NoProfile -Command "Start-Sleep -Milliseconds 1000; Start-Process -FilePath '${escapedExePath}' -Verb RunAs"`
-
-  managerLogger.info('Restarting as administrator with command', command)
-
-  // 先启动 PowerShell（它会等待 1 秒），然后立即退出当前进程
-  exec(command, { windowsHide: true }, (error) => {
-    if (error) {
-      managerLogger.error('Failed to start PowerShell for admin restart', error)
-    }
-  })
-  managerLogger.info('PowerShell command started, quitting app immediately')
+  const command = createElevatedRestartCommand(exePath, restartArgs, process.pid)
+  // Wait for consent first. Cancelling UAC must leave the current connection running.
+  await execFilePromise(
+    'powershell.exe',
+    [
+      '-NoProfile',
+      '-NonInteractive',
+      '-EncodedCommand',
+      Buffer.from(command, 'utf16le').toString('base64')
+    ],
+    { windowsHide: true, timeout: 180000 }
+  )
+  await stopCoreBeforeAdminRestart?.(true)
   app.exit(0)
 }
 
 export async function requestTunPermissions(): Promise<void> {
   if (process.platform === 'win32') {
-    await restartAsAdmin()
+    if (!(await ensureWindowsTunAccess())) throw new Error('已取消 TUN 授权。')
   } else {
     const hasPermissions = await checkMihomoCorePermissions()
     if (!hasPermissions) {
       await grantTunPermissions()
     }
   }
+}
+
+export async function ensureWindowsTunAccess(): Promise<boolean> {
+  if (process.platform !== 'win32') return checkMihomoCorePermissions()
+  if (await checkAdminPrivileges()) return true
+  await getWindowsServiceStatus()
+  const { core = 'mihomo' } = await getAppConfig()
+  if (isWindowsServiceReady() && (await canUseWindowsService(core).catch(() => false))) return true
+  const choice = await dialog.showMessageBox({
+    type: 'question',
+    title: '选择 TUN 运行方式',
+    message: '启用 TUN 需要管理员授权。',
+    detail:
+      '安装后台服务后，主界面保持普通权限，今后无需反复授权。服务会保留在 Windows 中，可在 TUN 设置卸载。也可以仅本次以管理员方式重新打开 Navio。',
+    buttons: ['安装后台服务', '仅本次以管理员运行', '取消'],
+    defaultId: 0,
+    cancelId: 2
+  })
+  if (choice.response === 0) {
+    await manageWindowsService('install')
+    return isWindowsServiceReady() && (await canUseWindowsService(core))
+  }
+  if (choice.response === 1) await restartAsAdmin()
+  return false
 }
 
 export async function showTunPermissionDialog(): Promise<boolean> {

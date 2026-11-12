@@ -22,6 +22,7 @@ import { useTranslation } from 'react-i18next'
 import SettingItem from '../base/base-setting-item'
 import SettingCard from '../base/base-setting-card'
 import BaseConfirmModal from '../base/base-confirm-modal'
+import BackupExternalModal from './backup-external-modal'
 
 const LocalBackupConfig: React.FC = () => {
   const { t } = useTranslation()
@@ -31,6 +32,7 @@ const LocalBackupConfig: React.FC = () => {
   const [repeat, setRepeat] = useState('')
   const [passwordSet, setPasswordSet] = useState(false)
   const [plaintext, setPlaintext] = useState(false)
+  const [externalScope, setExternalScope] = useState<'export' | 'manage' | null>(null)
   useEffect(() => {
     void hasBackupPassword()
       .then(setPasswordSet)
@@ -40,10 +42,6 @@ const LocalBackupConfig: React.FC = () => {
   const [exporting, setExporting] = useState(false)
 
   const handleExport = async (): Promise<void> => {
-    if (appConfig?.backupEncrypted !== false && !passwordSet) {
-      setDialog('password')
-      return
-    }
     setExporting(true)
     try {
       const success = await exportLocalBackup()
@@ -92,6 +90,17 @@ const LocalBackupConfig: React.FC = () => {
 
   return (
     <>
+      {externalScope && (
+        <BackupExternalModal
+          onClose={() => setExternalScope(null)}
+          actionLabel={externalScope === 'export' ? '保存选择并导出' : '保存选择'}
+          onApproved={async () => {
+            const exportingNow = externalScope === 'export'
+            setExternalScope(null)
+            if (exportingNow) await handleExport()
+          }}
+        />
+      )}
       <BaseConfirmModal
         isOpen={plaintext}
         onCancel={() => setPlaintext(false)}
@@ -194,8 +203,20 @@ const LocalBackupConfig: React.FC = () => {
           </Button>
         </SettingItem>
         <SettingItem title={t('localBackup.export.title')} divider>
-          <Button isLoading={exporting} size="sm" onPress={handleExport}>
+          <Button
+            isLoading={exporting}
+            size="sm"
+            onPress={() => {
+              if (appConfig?.backupEncrypted !== false && !passwordSet) setDialog('password')
+              else setExternalScope('export')
+            }}
+          >
             {t('localBackup.export.button')}
+          </Button>
+        </SettingItem>
+        <SettingItem title="外部文件备份范围（本地与 WebDAV 共用）" divider>
+          <Button size="sm" onPress={() => setExternalScope('manage')}>
+            查看与调整
           </Button>
         </SettingItem>
         <SettingItem title={t('localBackup.import.title')}>

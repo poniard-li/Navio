@@ -35,6 +35,7 @@ Navio 基于 Clash Party 2.0.4 源码开发，使用独立的品牌、交互和�
    node scripts/release-windows.cjs "<已解压Party便携目录>" "<新发布目录>" "<新工作暂存目录>"
 
 此命令使用 Node.js 24+ 编译完整客户端，再以固定运行时生成 Navio-v<版本>-Windows-x64-setup.exe 和 Navio-v<版本>-Windows-x64-portable.zip，并写入 SHA256SUMS.txt、RELEASE-MANIFEST.json。发布目录和工作暂存目录必须不存在，且与源码、参考包和彼此完全分开；失败后保留工作目录供检查，重试时使用新的目录。
+打包时会使用 Windows 自带 .NET Framework 编译器编译 src/native/windows-service/NavioService.cs，并核对固定内核哈希。也可先运行 node scripts/build-windows-service.cjs 编译和检查服务宿主；此步骤不安装服务或申请管理员权限。
 仅当 out 已由同一版本的完整源码编译时，才可追加 --skip-build 复用编译结果。该选项主要用于打包验证，不会检查源码是否比 out 更新。
 安装版仅支持当前 Windows 用户，配置保存在 %APPDATA%\DEX-STUDIO-NEXT；卸载默认保留配置。安装器拒绝包含 PORTABLE 或 DEX-STUDIO-NEXT 的目标目录，并要求运行中的 Navio 先从系统托盘正常退出，不会强制结束进程。卸载时仅清理执行路径与本次安装完全匹配的自启动项；升级保留自启动设置。若系统权限阻止清理，卸载详情会给出提示，可在 Windows 中检查并关闭残留的自启动项。
 便携版在程序同级保留 PORTABLE 标记，配置写入同级 DEX-STUDIO-NEXT。两种格式使用相同的程序、应用归档和固定内核；构建过程不会启动 Navio 或安装应用。

@@ -15,6 +15,7 @@ import { getCoreRuntimeState, setAppliedTunState } from './runtime-state'
 import { generateProfile, getRuntimeConfig } from './factory'
 import { syncControlDnsAfterApply } from './dnsOverrideGuard'
 import { getMihomoIpcPath, hasCoreProcess, restartCore } from './manager'
+import { isWindowsServiceActive, isWindowsServiceReady } from './windows-service'
 
 const mihomoApiLogger = createLogger('MihomoApi')
 
@@ -210,6 +211,9 @@ export async function mihomoVersion(): Promise<IMihomoVersion> {
 }
 
 export const patchMihomoConfig = async (patch: Partial<IMihomoConfig>): Promise<void> => {
+  if (patch.tun?.enable && isWindowsServiceReady() && !isWindowsServiceActive()) {
+    await restartCore()
+  }
   // All callers, including tray/SSID and legacy renderer patches, must retain exception routing.
   const effectivePatch =
     patch.mode && usesGlobalBypass(patch.mode, (await getAppConfig()).dexBypass)
@@ -461,6 +465,10 @@ export const mihomoUpgradeUI = async (): Promise<void> => {
 
 export const mihomoHotReloadConfig = async (): Promise<void> => {
   mihomoApiLogger.info('mihomoHotReloadConfig called')
+  if (isWindowsServiceActive()) {
+    await restartCore()
+    return
+  }
   if (!hasCoreProcess()) {
     mihomoApiLogger.warn('Core is not running, restarting core instead of hot reload')
     await restartCore()
