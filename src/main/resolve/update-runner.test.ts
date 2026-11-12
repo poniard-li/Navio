@@ -7,6 +7,10 @@ import path from 'path'
 import { it, expect } from 'vitest'
 import { UPDATE_SCRIPT } from './update-runner'
 const exec = promisify(execFile)
+// Windows PowerShell cold startup on CI can exceed Vitest's 5s default.
+// Keep the test deadline beyond the bounded child process so its finally block can clean up.
+const subprocessTimeoutMs = 15000
+const testTimeoutMs = 30000
 it
   .skipIf(process.platform !== 'win32')
   .each(['success', 'checksum', 'move-failure', 'restart-failure'])(
@@ -64,7 +68,7 @@ it
           '-PlanPath',
           path.join(cache, 'plan.json')
         ],
-        { windowsHide: true, timeout: 15000 }
+        { windowsHide: true, timeout: subprocessTimeoutMs }
       )
       const outcome = JSON.parse(
         (await readFile(path.join(cache, 'result.json'), 'utf8')).replace(/^\uFEFF/, '')
@@ -92,7 +96,8 @@ it
     } finally {
       expect(path.dirname(root)).toBe(path.resolve(tmpdir()))
       expect(path.basename(root)).toMatch(/^navio-helper-test-/)
-      await rm(root, { recursive: true, force: true })
+      await rm(root, { recursive: true, force: true, maxRetries: 5, retryDelay: 100 })
     }
-  }
+  },
+  testTimeoutMs
 )
