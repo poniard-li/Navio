@@ -1,6 +1,6 @@
 import path from 'path'
 import { createHash } from 'crypto'
-import { dialog, nativeTheme, type IpcMainInvokeEvent } from 'electron'
+import { dialog, nativeTheme, net, type IpcMainInvokeEvent } from 'electron'
 import {
   officialThemeDefinition,
   type OfficialThemeSettings,
@@ -34,7 +34,8 @@ let officialLibrary: OfficialThemeStore | undefined
 let trial: { theme: DexTheme; settings: Record<string, OfficialThemeSettings> } | undefined
 function officialService(): OfficialThemeStore {
   return (officialLibrary ??= new OfficialThemeStore(
-    path.join(dataDir(), 'dex-library', 'official')
+    path.join(dataDir(), 'dex-library', 'official'),
+    (input, init) => net.fetch(input instanceof URL ? input.href : input, init)
   ))
 }
 function trialState(): ThemeTrialState | null {

@@ -1,4 +1,4 @@
-import { mkdtemp, rm } from 'node:fs/promises'
+import { mkdtemp, readFile, rm } from 'node:fs/promises'
 import path from 'node:path'
 import os from 'node:os'
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
@@ -22,10 +22,15 @@ const mocks = vi.hoisted(() => {
     webContents,
     writeTheme: vi.fn(async () => {}),
     applyTheme: vi.fn(async () => {}),
-    accountRequest: vi.fn()
+    accountRequest: vi.fn(),
+    chromiumFetch: vi.fn()
   }
 })
-vi.mock('electron', () => ({ dialog: {}, nativeTheme: { shouldUseDarkColors: true } }))
+vi.mock('electron', () => ({
+  dialog: {},
+  nativeTheme: { shouldUseDarkColors: true },
+  net: { fetch: mocks.chromiumFetch }
+}))
 vi.mock('../utils/dirs', () => ({ dataDir: () => mocks.directory }))
 vi.mock('../window', () => ({
   mainWindow: { webContents: mocks.webContents, isDestroyed: () => false }
@@ -49,6 +54,7 @@ beforeEach(async () => {
   mocks.config = { appTheme: 'system', customTheme: 'default.css' }
 })
 afterEach(async () => {
+  vi.unstubAllGlobals()
   if (!mocks.directory.startsWith(path.join(os.tmpdir(), 'dex-theme-ipc-')))
     throw new Error('Unexpected test directory')
   await rm(mocks.directory, { recursive: true, force: true })
@@ -57,6 +63,34 @@ const event = (): IpcMainInvokeEvent =>
   ({ sender: mocks.webContents, senderFrame: mocks.frame }) as unknown as IpcMainInvokeEvent
 
 describe('restricted D.E.X theme IPC adapter', () => {
+  it('downloads official themes through Chromium and reuses the verified cache without either network transport', async () => {
+    const bytes = await readFile(path.resolve('scripts/theme-packages/Navio-Theme-aurora-1.json'))
+    const directFetch = vi.fn().mockRejectedValue(new Error('Direct network unavailable'))
+    vi.stubGlobal('fetch', directFetch)
+    mocks.chromiumFetch.mockResolvedValueOnce(new Response(bytes))
+    const { dexThemes } = await import('./dex-theme')
+    await dexThemes(event(), 'installOfficial', { id: 'navio-aurora' })
+    expect(mocks.chromiumFetch).toHaveBeenCalledWith(
+      'https://github.com/poniard-li/Navio/releases/download/v1.0.0-beta.7/Navio-Theme-aurora-1.json',
+      expect.objectContaining({
+        redirect: 'manual',
+        credentials: 'omit',
+        signal: expect.any(AbortSignal)
+      })
+    )
+    expect(
+      await readFile(path.join(mocks.directory, 'dex-library/official/navio-aurora.json'))
+    ).toEqual(bytes)
+    mocks.chromiumFetch.mockRejectedValue(new Error('Offline'))
+    await dexThemes(event(), 'installOfficial', { id: 'navio-aurora' })
+    await dexThemes(event(), 'trial', { id: 'navio-aurora', appearance: 'light' })
+    expect(await dexThemes(event(), 'activeBackground')).toMatchObject({
+      id: 'navio-aurora',
+      appearance: 'light'
+    })
+    expect(mocks.chromiumFetch).toHaveBeenCalledTimes(1)
+    expect(directFetch).not.toHaveBeenCalled()
+  })
   it('keeps cross-page trials temporary and restores settings without changing the persisted theme', async () => {
     const { dexThemes } = await import('./dex-theme')
     const original = { ...mocks.config }
