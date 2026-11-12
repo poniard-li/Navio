@@ -10,7 +10,8 @@ import {
   DropdownSection,
   DropdownTrigger,
   Switch,
-  Spinner
+  Spinner,
+  Input
 } from '@heroui/react'
 import BasePage from '@renderer/components/base/base-page'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
@@ -43,7 +44,15 @@ import { IoIosArrowBack } from 'react-icons/io'
 import { useGroups } from '@renderer/hooks/use-groups'
 import { useProfileConfig } from '@renderer/hooks/use-profile-config'
 import { useNavigate } from 'react-router-dom'
-import { LuArrowRight, LuFolderOpen, LuRefreshCw, LuServerOff, LuWaypoints } from 'react-icons/lu'
+import {
+  LuArrowRight,
+  LuFolderOpen,
+  LuRefreshCw,
+  LuServerOff,
+  LuWaypoints,
+  LuSearch,
+  LuStar
+} from 'react-icons/lu'
 import CollapseInput from '@renderer/components/base/collapse-input'
 import { includesIgnoreCase } from '@renderer/utils/includes'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
@@ -73,6 +82,7 @@ import SortableGroup from '@renderer/components/proxies/sortable-group'
 import { toast } from '@renderer/components/base/toast'
 import { usesGlobalBypass } from '../../../shared/dex-bypass'
 import type { SimpleObject } from '../../../shared/simple-config'
+import '../assets/navio-proxies-v7.css'
 
 const GROUP_EXPAND_STATE_KEY = 'proxy_group_expand_state'
 const EMPTY_GROUPS: IMihomoMixedGroup[] = []
@@ -196,6 +206,22 @@ const Proxies: React.FC = () => {
     setShowHidden
   } = useGroups()
   const { appConfig, patchAppConfig } = useAppConfig()
+  const [globalSearch, setGlobalSearch] = useState('')
+  const [favoritesOnly, setFavoritesOnly] = useState(false)
+  const favoriteNodes = useMemo(
+    () => appConfig?.navioFavoriteNodes ?? [],
+    [appConfig?.navioFavoriteNodes]
+  )
+  const toggleFavorite = useCallback(
+    (name: string): void => {
+      void patchAppConfig({
+        navioFavoriteNodes: favoriteNodes.includes(name)
+          ? favoriteNodes.filter((item) => item !== name)
+          : [...favoriteNodes, name]
+      })
+    },
+    [favoriteNodes, patchAppConfig]
+  )
   const simpleMode = appConfig?.operationMode === 'simple'
   const needsFirstProfile = !simpleMode && Boolean(profileConfig) && !profileConfig?.items?.length
   const [retryingGroups, setRetryingGroups] = useState(false)
@@ -365,6 +391,8 @@ const Proxies: React.FC = () => {
       if (!editing && isOpen[index]) {
         const filtered = group.all.filter((proxy) => {
           if (!proxy) return false
+          if (!includesIgnoreCase(proxy.name, globalSearch)) return false
+          if (favoritesOnly && !favoriteNodes.includes(proxy.name)) return false
           if (!includesIgnoreCase(proxy.name, searchValue[index])) {
             return false
           }
@@ -401,23 +429,35 @@ const Proxies: React.FC = () => {
     searchValue,
     sortProxies,
     appConfig?.hideUnavailableProxies,
+    globalSearch,
+    favoritesOnly,
+    favoriteNodes,
     editing
   ])
 
   const onChangeProxy = useCallback(
     async (group: string, proxy: string): Promise<void> => {
-      await mihomoChangeProxy(group, proxy)
-      if (autoCloseConnection) {
-        await mihomoCloseAllConnections(autoCloseConnectionOnlyGroup ? group : undefined)
+      try {
+        await mihomoChangeProxy(group, proxy)
+        if (autoCloseConnection) {
+          await mihomoCloseAllConnections(autoCloseConnectionOnlyGroup ? group : undefined)
+        }
+        await mutate()
+        window.electron.ipcRenderer.send('updateTrayMenu')
+        window.dispatchEvent(new CustomEvent('navio-theme-feedback', { detail: 'node' }))
+      } catch (error) {
+        toast.error(String(error))
       }
-      mutate()
     },
     [autoCloseConnection, autoCloseConnectionOnlyGroup, mutate]
   )
 
   const onProxyDelay = useCallback(
     async (proxy: IMihomoProxy | IMihomoGroup, url?: string): Promise<IMihomoDelay> => {
-      return await mihomoProxyDelay(proxy.name, url, getProviderName(proxy))
+      const result = await mihomoProxyDelay(proxy.name, url, getProviderName(proxy))
+      if (typeof result.delay === 'number' && result.delay > 0)
+        window.dispatchEvent(new CustomEvent('navio-theme-feedback', { detail: 'latency' }))
+      return result
     },
     []
   )
@@ -505,6 +545,16 @@ const Proxies: React.FC = () => {
 
   const onGroupDelay = useCallback(
     async (index: number): Promise<void> => {
+      const candidates = groups[index].all.filter(
+        (proxy) =>
+          includesIgnoreCase(proxy.name, searchValue[index]) &&
+          includesIgnoreCase(proxy.name, globalSearch) &&
+          (!favoritesOnly || favoriteNodes.includes(proxy.name)) &&
+          (!appConfig?.hideUnavailableProxies ||
+            'all' in proxy ||
+            !proxy.history.length ||
+            proxy.history.at(-1)?.delay !== 0)
+      )
       if (allProxies[index].length === 0) {
         setIsOpen((prev) => {
           const newOpen = [...prev]
@@ -512,7 +562,7 @@ const Proxies: React.FC = () => {
           return newOpen
         })
       }
-      const proxyNames = allProxies[index].map((p) => p.name)
+      const proxyNames = candidates.map((p) => p.name)
       setDelaying((prev) => {
         const next = [...prev]
         next[index] = new Set(proxyNames)
@@ -522,7 +572,7 @@ const Proxies: React.FC = () => {
       // 限制并发数量
       const result: Promise<void>[] = []
       const runningList: Promise<void>[] = []
-      for (const proxy of allProxies[index]) {
+      for (const proxy of candidates) {
         const promise = Promise.resolve().then(async () => {
           let res: IMihomoDelay | undefined
           try {
@@ -561,6 +611,7 @@ const Proxies: React.FC = () => {
       }
       await Promise.all(result)
       flushDelayResults()
+      window.dispatchEvent(new CustomEvent('navio-theme-feedback', { detail: 'latency' }))
     },
     [
       allProxies,
@@ -568,7 +619,12 @@ const Proxies: React.FC = () => {
       delayTestConcurrency,
       scheduleFlushDelayResults,
       flushDelayResults,
-      setIsOpen
+      setIsOpen,
+      searchValue,
+      globalSearch,
+      favoritesOnly,
+      favoriteNodes,
+      appConfig?.hideUnavailableProxies
     ]
   )
 
@@ -579,6 +635,7 @@ const Proxies: React.FC = () => {
     if (window.matchMedia('(min-width: 1536px)').matches) return 5
     if (window.matchMedia('(min-width: 1280px)').matches) return 4
     if (window.matchMedia('(min-width: 1024px)').matches) return 3
+    if (window.matchMedia('(max-width: 719px)').matches) return 1
     return 2
   }, [proxyCols])
 
@@ -615,6 +672,7 @@ const Proxies: React.FC = () => {
         >
           <Card
             as="div"
+            className="navio-v7-proxy-group navio-material-card"
             isPressable
             fullWidth
             onPress={() => {
@@ -700,7 +758,7 @@ const Proxies: React.FC = () => {
                         {proxyDisplayMode === 'full' && (
                           <Chip size="sm" className="my-1 mr-2">
                             {/* 搜索时显示过滤后的节点数，显示总数会让人以为筛选没生效（#332） */}
-                            {searchValue[index] && isOpen[index]
+                            {(searchValue[index] || globalSearch || favoritesOnly) && isOpen[index]
                               ? (allProxies[index]?.length ?? 0)
                               : groups[index].all.length}
                           </Chip>
@@ -729,6 +787,32 @@ const Proxies: React.FC = () => {
                           size="sm"
                           isIconOnly
                           onPress={() => {
+                            const currentIndex = allProxies[index].findIndex(
+                              (proxy) => proxy.name === groups[index].now
+                            )
+                            if (
+                              currentIndex < 0 &&
+                              (globalSearch || favoritesOnly || searchValue[index])
+                            ) {
+                              setGlobalSearch('')
+                              setFavoritesOnly(false)
+                              setSearchValue((previous) =>
+                                previous.map((value, groupIndex) =>
+                                  groupIndex === index ? '' : value
+                                )
+                              )
+                              setIsOpen((previous) =>
+                                previous.map((value, groupIndex) =>
+                                  groupIndex === index ? true : value
+                                )
+                              )
+                              virtuosoRef.current?.scrollToIndex({
+                                groupIndex: index,
+                                align: 'start'
+                              })
+                              toast.info('已清除搜索和收藏筛选，当前节点显示在此策略组中。')
+                              return
+                            }
                             if (!isOpen[index]) {
                               setIsOpen((prev) => {
                                 const newOpen = [...prev]
@@ -740,11 +824,7 @@ const Proxies: React.FC = () => {
                             for (let j = 0; j < index; j++) {
                               i += groupCounts[j]
                             }
-                            i += Math.floor(
-                              allProxies[index].findIndex(
-                                (proxy) => proxy.name === groups[index].now
-                              ) / cols
-                            )
+                            i += Math.max(0, Math.floor(currentIndex / cols))
                             virtuosoRef.current?.scrollToIndex({
                               index: Math.floor(i),
                               align: 'start'
@@ -789,6 +869,8 @@ const Proxies: React.FC = () => {
       proxyDisplayMode,
       t,
       searchValue,
+      globalSearch,
+      favoritesOnly,
       delaying,
       mutate,
       setIsOpen,
@@ -815,7 +897,7 @@ const Proxies: React.FC = () => {
           style={
             proxyCols !== 'auto'
               ? { gridTemplateColumns: `repeat(${proxyCols}, minmax(0, 1fr))` }
-              : {}
+              : { gridTemplateColumns: `repeat(${cols}, minmax(0, 1fr))` }
           }
           className={`grid ${proxyCols === 'auto' ? 'sm:grid-cols-2 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 2xl:grid-cols-5' : ''} ${groupIndex === groupCounts.length - 1 && innerIndex === groupCounts[groupIndex] - 1 ? 'pb-2' : ''} gap-2 pt-2 mx-2`}
         >
@@ -833,6 +915,10 @@ const Proxies: React.FC = () => {
                 selected={
                   allProxies[groupIndex][innerIndex * cols + i]?.name === groups[groupIndex].now
                 }
+                favorite={favoriteNodes.includes(
+                  allProxies[groupIndex][innerIndex * cols + i].name
+                )}
+                onFavorite={toggleFavorite}
                 isGroupTesting={
                   delaying[groupIndex]?.has(allProxies[groupIndex][innerIndex * cols + i].name) ??
                   false
@@ -855,7 +941,9 @@ const Proxies: React.FC = () => {
       delaying,
       mutate,
       onProxyDelay,
-      onChangeProxy
+      onChangeProxy,
+      favoriteNodes,
+      toggleFavorite
     ]
   )
 
@@ -1237,7 +1325,40 @@ const Proxies: React.FC = () => {
           )}
         </div>
       ) : (
-        <div className="h-[calc(100vh-50px)] flex flex-col">
+        <div className="navio-v7-proxies h-[calc(100vh-50px)] flex flex-col">
+          <div className="navio-v7-proxy-toolbar">
+            <Input
+              size="sm"
+              value={globalSearch}
+              onValueChange={setGlobalSearch}
+              isClearable
+              aria-label="搜索全部代理组中的节点"
+              placeholder="搜索所有节点"
+              startContent={<LuSearch />}
+              className="navio-v7-proxy-search"
+            />
+            <Button
+              size="sm"
+              variant={favoritesOnly ? 'solid' : 'flat'}
+              color={favoritesOnly ? 'primary' : 'default'}
+              startContent={<LuStar />}
+              aria-pressed={favoritesOnly}
+              onPress={() => setFavoritesOnly((value) => !value)}
+            >
+              收藏
+            </Button>
+            <Button
+              size="sm"
+              variant="light"
+              isIconOnly
+              aria-label="刷新代理组"
+              isLoading={retryingGroups || groupsRefreshing}
+              onPress={() => void retryGroups()}
+            >
+              <LuRefreshCw />
+            </Button>
+            <span>{groups.length} 个策略组</span>
+          </div>
           {groupsError && (
             <div className="dex-proxy-refresh-error" role="status">
               <span>

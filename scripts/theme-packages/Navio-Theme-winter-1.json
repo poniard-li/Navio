@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "winter",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-winter",
+      "name": "冬日初雪",
+      "author": "D.E.X Studio",
+      "description": "冰蓝色磨砂表面搭配窗边积雪与稀疏雪花。雪花位于窗口底层，列表、输入框和文字保持清晰。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#172026",
+        "surface": "#212e36",
+        "surfaceRaised": "#2a3b46",
+        "border": "#40525e",
+        "text": "#ecf0f4",
+        "muted": "#a5b8c5",
+        "accent": "#90bfdf",
+        "accentText": "#1a2932",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#172026"] }
+    },
+    "light": {
+      "id": "navio-winter",
+      "name": "冬日初雪",
+      "author": "D.E.X Studio",
+      "description": "冰蓝色磨砂表面搭配窗边积雪与稀疏雪花。雪花位于窗口底层，列表、输入框和文字保持清晰。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#e6ecf0",
+        "surface": "#f5f8f9",
+        "surfaceRaised": "#dce4ea",
+        "border": "#b6c7d3",
+        "text": "#25333c",
+        "muted": "#566c7b",
+        "accent": "#2e6285",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#e6ecf0"] }
+    }
+  }
+}

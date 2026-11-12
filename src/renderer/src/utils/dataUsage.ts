@@ -99,5 +99,6 @@ export function getProxyStatsByHost(
 
 export async function clearTrafficUsageData(): Promise<void> {
   await legacyTrafficUsageDatabase.clear()
-  if (!__LEGACY_BUILD__) await clearTrafficUsage()
+  await clearTrafficUsage()
+  window.dispatchEvent(new Event('navio-traffic-cleared'))
 }

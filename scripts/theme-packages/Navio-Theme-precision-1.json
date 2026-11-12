@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "precision",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-precision",
+      "name": "精密刻度",
+      "author": "D.E.X Studio",
+      "description": "下载速率、连接时长、延迟与订阅余量采用等宽排印。原有流量曲线和进度使用清晰刻度，不增加额外数字面板。",
+      "appearance": "dark",
+      "radius": 8,
+      "colors": {
+        "bg": "#17261f",
+        "surface": "#21362c",
+        "surfaceRaised": "#2a4639",
+        "border": "#405e50",
+        "text": "#ecf4f0",
+        "muted": "#a5c5b6",
+        "accent": "#90dfb9",
+        "accentText": "#1a3227",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#17261f"] }
+    },
+    "light": {
+      "id": "navio-precision",
+      "name": "精密刻度",
+      "author": "D.E.X Studio",
+      "description": "下载速率、连接时长、延迟与订阅余量采用等宽排印。原有流量曲线和进度使用清晰刻度，不增加额外数字面板。",
+      "appearance": "light",
+      "radius": 8,
+      "colors": {
+        "bg": "#e6f0eb",
+        "surface": "#f5f9f7",
+        "surfaceRaised": "#dceae3",
+        "border": "#b6d3c5",
+        "text": "#253c31",
+        "muted": "#567b69",
+        "accent": "#2e855b",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#e6f0eb"] }
+    }
+  }
+}

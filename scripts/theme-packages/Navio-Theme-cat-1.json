@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "cat",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-cat",
+      "name": "午后猫舍",
+      "author": "D.E.X Studio",
+      "description": "阳光穿过猫舍的窗格，窗台和柔软布料构成整幅背景。猫咪在现有卡片边缘活动，连接、节点切换和测速时会回应。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#261f17",
+        "surface": "#362c21",
+        "surfaceRaised": "#46392a",
+        "border": "#5e5040",
+        "text": "#f4f0ec",
+        "muted": "#c5b6a5",
+        "accent": "#dfb990",
+        "accentText": "#32271a",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#261f17"] }
+    },
+    "light": {
+      "id": "navio-cat",
+      "name": "午后猫舍",
+      "author": "D.E.X Studio",
+      "description": "阳光穿过猫舍的窗格，窗台和柔软布料构成整幅背景。猫咪在现有卡片边缘活动，连接、节点切换和测速时会回应。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#f0ebe6",
+        "surface": "#f9f7f5",
+        "surfaceRaised": "#eae3dc",
+        "border": "#d3c5b6",
+        "text": "#3c3125",
+        "muted": "#7b6956",
+        "accent": "#855b2e",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#f0ebe6"] }
+    }
+  }
+}

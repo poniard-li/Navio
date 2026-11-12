@@ -1,11 +1,11 @@
-import { Suspense, lazy, useEffect, useState } from 'react'
+import { Suspense, lazy } from 'react'
 import { useLocation, useNavigate } from 'react-router-dom'
 import { useTranslation } from 'react-i18next'
-import { LuPalette, LuPanelLeftClose, LuPanelLeftOpen, LuSettings2, LuSearch } from 'react-icons/lu'
+import { LuPanelLeftClose, LuPanelLeftOpen, LuSearch } from 'react-icons/lu'
 import NavioIcon from '../base/navio-icon'
 import OutboundModeSwitcher from '../sider/outbound-mode-switcher'
 import { PRODUCT_NAME } from '../../../../shared/product'
-import FeatureSearch from './feature-search'
+import { utilityItems } from './sidebar'
 
 const SiderCards = lazy(() => import('../sider/sider-cards'))
 
@@ -24,25 +24,6 @@ export default function ClassicSidebar({
   const chinese = i18n.language.startsWith('zh')
   const navigate = useNavigate()
   const { pathname } = useLocation()
-  const [searchOpen, setSearchOpen] = useState(false)
-  useEffect(() => {
-    const openSearch = (): void => {
-      if (!document.querySelector('[role="dialog"][aria-modal="true"]')) setSearchOpen(true)
-    }
-    const shortcut = (event: KeyboardEvent): void => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-        if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
-        event.preventDefault()
-        openSearch()
-      }
-    }
-    window.addEventListener('dex-open-search', openSearch)
-    window.addEventListener('keydown', shortcut)
-    return () => {
-      window.removeEventListener('dex-open-search', openSearch)
-      window.removeEventListener('keydown', shortcut)
-    }
-  }, [])
   return (
     <aside className="side dex-sidebar dex-classic-sidebar sider-rail" data-expanded={!collapsed}>
       <div className="dex-brand app-drag">
@@ -68,7 +49,7 @@ export default function ClassicSidebar({
       <button
         className="dex-classic-search"
         type="button"
-        onClick={() => setSearchOpen(true)}
+        onClick={() => window.dispatchEvent(new Event('dex-open-search'))}
         aria-label={chinese ? '搜索全部功能' : 'Search all features'}
       >
         <LuSearch />
@@ -89,33 +70,26 @@ export default function ClassicSidebar({
           </button>
         )}
         <div className="dex-utilities">
-          <button
-            className="dex-nav-item"
-            data-active={pathname === '/dex-themes'}
-            type="button"
-            title={chinese ? '主题工坊' : 'Appearance'}
-            onClick={() => {
-              void navigate('/dex-themes')
-            }}
-          >
-            <LuPalette className="dex-nav-icon" />
-            <span className="dex-nav-label">{chinese ? '主题工坊' : 'Appearance'}</span>
-          </button>
-          <button
-            className="dex-nav-item"
-            data-active={pathname === '/settings'}
-            type="button"
-            title={t('common.settings')}
-            onClick={() => {
-              void navigate('/settings')
-            }}
-          >
-            <LuSettings2 className="dex-nav-icon" />
-            <span className="dex-nav-label">{t('common.settings')}</span>
-          </button>
+          {utilityItems.map((item) => {
+            const Icon = item.icon
+            const label = t(item.key, { defaultValue: chinese ? item.fallback : item.english })
+            return (
+              <button
+                key={item.path}
+                className="dex-nav-item"
+                type="button"
+                data-active={pathname === item.path}
+                title={label}
+                aria-current={pathname === item.path ? 'page' : undefined}
+                onClick={() => navigate(item.path)}
+              >
+                <Icon className="dex-nav-icon" aria-hidden="true" />
+                <span className="dex-nav-label">{label}</span>
+              </button>
+            )
+          })}
         </div>
       </div>
-      {searchOpen && <FeatureSearch onClose={() => setSearchOpen(false)} />}
     </aside>
   )
 }

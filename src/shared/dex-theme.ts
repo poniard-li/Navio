@@ -47,7 +47,16 @@ export const DEX_THEME_ACTIONS = [
   'importMedia',
   'loadMedia',
   'pruneMedia',
-  'activeBackground'
+  'activeBackground',
+  'officialCatalog',
+  'installOfficial',
+  'removeOfficial',
+  'officialSettings',
+  'officialFavorite',
+  'trial',
+  'trialState',
+  'keepTrial',
+  'restoreTrial'
 ] as const
 export type DexThemeAction = (typeof DEX_THEME_ACTIONS)[number]
 

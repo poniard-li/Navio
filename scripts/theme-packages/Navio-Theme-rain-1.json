@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "rain",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-rain",
+      "name": "雨夜",
+      "author": "D.E.X Studio",
+      "description": "雨线持续滑过窗面，远处光晕轻轻摇动。所有文字和操作留在清晰的前景。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#171c26",
+        "surface": "#212836",
+        "surfaceRaised": "#2a3346",
+        "border": "#404a5e",
+        "text": "#eceef4",
+        "muted": "#a5b0c5",
+        "accent": "#90abdf",
+        "accentText": "#1a2232",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#171c26"] }
+    },
+    "light": {
+      "id": "navio-rain",
+      "name": "雨夜",
+      "author": "D.E.X Studio",
+      "description": "雨线持续滑过窗面，远处光晕轻轻摇动。所有文字和操作留在清晰的前景。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#e6e9f0",
+        "surface": "#f5f7f9",
+        "surfaceRaised": "#dce1ea",
+        "border": "#b6bfd3",
+        "text": "#252d3c",
+        "muted": "#56627b",
+        "accent": "#2e4b85",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#e6e9f0"] }
+    }
+  }
+}

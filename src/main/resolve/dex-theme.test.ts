@@ -25,7 +25,7 @@ const mocks = vi.hoisted(() => {
     accountRequest: vi.fn()
   }
 })
-vi.mock('electron', () => ({ dialog: {} }))
+vi.mock('electron', () => ({ dialog: {}, nativeTheme: { shouldUseDarkColors: true } }))
 vi.mock('../utils/dirs', () => ({ dataDir: () => mocks.directory }))
 vi.mock('../window', () => ({
   mainWindow: { webContents: mocks.webContents, isDestroyed: () => false }
@@ -57,6 +57,39 @@ const event = (): IpcMainInvokeEvent =>
   ({ sender: mocks.webContents, senderFrame: mocks.frame }) as unknown as IpcMainInvokeEvent
 
 describe('restricted D.E.X theme IPC adapter', () => {
+  it('keeps cross-page trials temporary and restores settings without changing the persisted theme', async () => {
+    const { dexThemes } = await import('./dex-theme')
+    const original = { ...mocks.config }
+    await dexThemes(event(), 'trial', { id: 'navio-liquid' })
+    await dexThemes(event(), 'officialSettings', {
+      id: 'navio-liquid',
+      settings: { intensity: 80, appearance: 'light' }
+    })
+    await dexThemes(event(), 'cancelPreview')
+    expect(await dexThemes(event(), 'trialState')).toMatchObject({ id: 'navio-liquid' })
+    expect(await dexThemes(event(), 'activeBackground')).toMatchObject({
+      id: 'navio-liquid',
+      appearance: 'light'
+    })
+    expect(mocks.config).toEqual(original)
+    await dexThemes(event(), 'restoreTrial')
+    expect(await dexThemes(event(), 'trialState')).toBeNull()
+    expect(await dexThemes(event(), 'officialSettings', { id: 'navio-liquid' })).toMatchObject({
+      intensity: 45,
+      appearance: 'system'
+    })
+    expect(mocks.config).toEqual(original)
+  })
+  it('commits a trial only after keep and prevents overriding official ids with imported designs', async () => {
+    const { dexThemes } = await import('./dex-theme')
+    await dexThemes(event(), 'trial', { id: 'navio-paper' })
+    await dexThemes(event(), 'keepTrial')
+    expect(mocks.config.customTheme).toBe('dex-navio-paper.css')
+    expect(await dexThemes(event(), 'trialState')).toBeNull()
+    expect(await dexThemes(event(), 'activeBackground')).toMatchObject({ id: 'navio-paper' })
+    const official = await dexThemes(event(), 'activeBackground')
+    await expect(dexThemes(event(), 'save', { theme: official })).rejects.toThrow('另存')
+  })
   const png = Buffer.from(
     'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNk+A8AAQUBAScY42YAAAAASUVORK5CYII=',
     'base64'

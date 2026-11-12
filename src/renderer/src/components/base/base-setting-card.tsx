@@ -12,7 +12,7 @@ const SettingCard: React.FC<Props> = (props) => {
   const [isOpen, setIsOpen] = useState(false)
 
   return !props.title ? (
-    <Card className={`${props.className} m-2`}>
+    <Card className={`navio-material-card ${props.className || ''} m-2`}>
       <CardBody>{props.children}</CardBody>
     </Card>
   ) : (
@@ -26,7 +26,7 @@ const SettingCard: React.FC<Props> = (props) => {
       {...props}
     >
       <AccordionItem
-        className="data-[open=true]:pb-2"
+        className="navio-material-card data-[open=true]:pb-2"
         hideIndicator
         keepContentMounted
         textValue={props.title}

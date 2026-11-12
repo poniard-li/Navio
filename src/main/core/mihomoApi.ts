@@ -2,6 +2,7 @@ import { createConnection } from 'net'
 import axios, { AxiosInstance } from 'axios'
 import WebSocket from 'ws'
 import { app } from 'electron'
+import { recordNavioTrafficRate, recordNavioTrafficTotals } from '../traffic/navio-live'
 import { getAppConfig, getControledMihomoConfig, manageSmartOverride } from '../config'
 import { mainWindow } from '../window'
 import { updateTrayTraffic } from '../resolve/tray'
@@ -550,6 +551,7 @@ const mihomoTraffic = async (): Promise<void> => {
       // JSON.parse 必须放在 try 内：内核发来非 JSON 帧时，旧实现会在 async 回调里
       // 抛出并变成未捕获的 Promise rejection（其余三条流都已在 try 内解析）。
       const json = JSON.parse(data) as IMihomoTrafficInfo
+      recordNavioTrafficRate(json)
       mainWindow?.webContents.send('mihomoTraffic', json)
       updateTrayTraffic(json.up, json.down)
       floatingWindow?.webContents.send('mihomoTraffic', json)
@@ -673,6 +675,7 @@ const mihomoConnections = async (): Promise<void> => {
     connectionsStream.retry = MAX_RETRY
     try {
       const info = JSON.parse(data) as IMihomoConnectionsInfo
+      recordNavioTrafficTotals(info)
       recordTrafficUsage(info)
       if (__LEGACY_BUILD__ || mainWindow?.isVisible()) {
         mainWindow?.webContents.send('mihomoConnections', info)

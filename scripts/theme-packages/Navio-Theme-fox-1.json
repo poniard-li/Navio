@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "fox",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-fox",
+      "name": "林间来客",
+      "author": "D.E.X Studio",
+      "description": "小狐狸待在林地边缘，尾巴缓缓摆动。它会跟随操作转头，连接状态改变时靠近或坐下。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#261e17",
+        "surface": "#362a21",
+        "surfaceRaised": "#46372a",
+        "border": "#5e4e40",
+        "text": "#f4efec",
+        "muted": "#c5b3a5",
+        "accent": "#dfb490",
+        "accentText": "#32251a",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#261e17"] }
+    },
+    "light": {
+      "id": "navio-fox",
+      "name": "林间来客",
+      "author": "D.E.X Studio",
+      "description": "小狐狸待在林地边缘，尾巴缓缓摆动。它会跟随操作转头，连接状态改变时靠近或坐下。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#f0eae6",
+        "surface": "#f9f7f5",
+        "surfaceRaised": "#eae2dc",
+        "border": "#d3c3b6",
+        "text": "#3c2f25",
+        "muted": "#7b6756",
+        "accent": "#85552e",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#f0eae6"] }
+    }
+  }
+}

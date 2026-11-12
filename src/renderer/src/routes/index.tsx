@@ -30,6 +30,7 @@ const Help = lazy(() => import('../pages/help'))
 const Bypass = lazy(() => import('../pages/bypass'))
 const Home = lazy(() => import('../pages/home'))
 const Credits = lazy(() => import('../pages/credits'))
+const Account = lazy(() => import('../pages/account'))
 
 const HomeRedirect: React.FC = () => {
   const { appConfig } = useAppConfig()
@@ -47,6 +48,7 @@ const ProfilesRoute: React.FC = () => {
 }
 
 const routes = [
+  { path: '/account', element: <Account /> },
   { path: '/home', element: <Home /> },
   { path: '/credits', element: <Credits /> },
   {

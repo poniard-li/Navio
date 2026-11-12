@@ -5,7 +5,6 @@ import {
   LuCloudUpload,
   LuDownload,
   LuFolderInput,
-  LuPalette,
   LuPencil,
   LuPlus,
   LuRefreshCw,
@@ -14,6 +13,8 @@ import {
 import { useNavigate } from 'react-router-dom'
 import BasePage from '@renderer/components/base/base-page'
 import ThemeCommunity from '@renderer/components/dex/theme-community'
+import OfficialThemeWorkshop from '@renderer/components/dex/official-theme-workshop'
+import { MaterialSettingsButton } from '@renderer/components/dex/material-settings'
 import { ThemeCanvas } from '@renderer/components/dex/theme-background'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { themeAssetUrl, type ThemeAsset } from '../../../shared/theme-media'
@@ -48,7 +49,7 @@ const colorLabels: Record<DexColorKey, string> = {
 const inputClass =
   'w-full rounded-lg border border-divider bg-content2 px-2.5 py-2 text-xs text-foreground outline-none focus:border-primary'
 const fieldLabel = 'mb-1.5 block text-xs font-medium text-default-600'
-type ThemeTab = 'builtins' | 'local' | 'remote'
+type ThemeTab = 'official' | 'local' | 'online' | 'favorites' | 'published'
 
 async function request<T>(action: DexThemeAction, payload: unknown = {}): Promise<T> {
   const result = await window.electron.ipcRenderer.invoke('dexThemes', action, payload)
@@ -108,85 +109,19 @@ function Preview({
   const c = theme.colors
   return (
     <div
-      aria-label={`${theme.name} 的界面预览`}
-      style={{
-        background: c.bg,
-        color: c.text,
-        borderColor: c.border,
-        borderRadius: Math.min(theme.radius, 12),
-        height: large ? 164 : 120
-      }}
-      className="relative flex overflow-hidden border"
+      className="navio-local-cover"
+      style={{ background: c.bg, color: c.text, height: large ? 210 : 150 }}
+      aria-label={`${theme.name} 的外观预览`}
     >
       <ThemeCanvas theme={theme} playback={large} />
-      <div
-        className="relative z-10 flex w-[25%] min-w-16 max-w-24 flex-col gap-1 border-r p-2"
-        style={{ background: c.surface, color: c.text, borderColor: c.border }}
-      >
-        <div className="mb-1 text-[9px] font-bold tracking-wider">{PRODUCT_NAME}</div>
-        {['代理节点', '订阅管理', '分流规则'].map((label, index) => (
-          <div
-            key={label}
-            className="rounded px-1.5 py-1 text-[7px]"
-            style={{
-              background:
-                index === 0 ? `color-mix(in srgb, ${c.accent} 14%, ${c.surface})` : 'transparent',
-              color: index === 0 ? c.text : c.muted
-            }}
-          >
-            {label}
-          </div>
-        ))}
-        <div
-          className="mt-auto flex items-center justify-between border-t pt-1 text-[6px]"
-          style={{ borderColor: c.border, color: c.muted }}
-        >
-          <span>系统代理</span>
-          <span className="h-2 w-4 rounded-full" style={{ background: c.accent }} />
-        </div>
-      </div>
-      <div className="relative z-10 min-w-0 flex-1 p-2.5">
-        <div className="mb-2 flex items-center justify-between gap-2 text-[8px]">
-          <span className="font-semibold">代理节点</span>
-          <span className="text-[6px]" style={{ color: c.muted }}>
-            布局示意
-          </span>
-        </div>
-        <div
-          className="overflow-hidden border"
-          style={{
-            background: c.surface,
-            borderColor: c.border,
-            borderRadius: Math.max(4, Math.min(8, theme.radius - 8))
-          }}
-        >
-          {['节点 A', '节点 B', '节点 C'].map((label, index) => (
-            <div
-              key={label}
-              className="flex items-center gap-2 px-2 text-[7px]"
-              style={{
-                height: large ? 31 : 22,
-                borderBottom: index < 2 ? `1px solid ${c.border}` : undefined,
-                background: index === 0 ? c.surfaceRaised : c.surface
-              }}
-            >
-              <span
-                className="h-1.5 w-1.5 rounded-full border"
-                style={{
-                  borderColor: index === 0 ? c.accent : c.muted,
-                  background: index === 0 ? c.accent : 'transparent'
-                }}
-              />
-              <span className="flex-1">{label}</span>
-              <span style={{ color: c.success }}>{[32, 48, 64][index]} ms</span>
-            </div>
+      <div className="navio-local-cover-content">
+        <span style={{ color: c.accent }}>{PRODUCT_NAME}</span>
+        <strong>{theme.name}</strong>
+        <div aria-label="配色">
+          {(['surface', 'surfaceRaised', 'accent', 'text'] as const).map((key) => (
+            <i key={key} style={{ background: c[key] }} />
           ))}
         </div>
-        {large && (
-          <p className="mt-2 text-[7px]" style={{ color: c.muted }}>
-            预览中的节点与延迟为布局示意
-          </p>
-        )}
       </div>
     </div>
   )
@@ -195,7 +130,7 @@ function Preview({
 const DexThemes: React.FC = () => {
   const [communityOpen, setCommunityOpen] = useState(false)
   const [catalog, setCatalog] = useState<DexThemeCatalog>(blankCatalog)
-  const [tab, setTab] = useState<ThemeTab>('builtins')
+  const [tab, setTab] = useState<ThemeTab>('official')
   const [busy, setBusy] = useState(false)
   const [notice, setNotice] = useState<{ text: string; error?: boolean } | null>(null)
   const [draft, setDraft] = useState<DexTheme | null>(null)
@@ -334,46 +269,26 @@ const DexThemes: React.FC = () => {
       }
     >
       <style>{`.dex-theme-cards{display:grid;grid-template-columns:repeat(auto-fit,minmax(min(100%,300px),1fr));gap:14px}.dex-theme-editor-grid{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,.92fr);gap:20px}@media(max-width:680px){.dex-theme-editor-grid{grid-template-columns:minmax(0,1fr)}}`}</style>
-      <div className="mx-auto max-w-[1200px] space-y-4 p-5 pb-8">
-        <div className="flex flex-wrap items-center justify-between gap-3">
+      <div className="navio-workshop-page">
+        <div className="navio-workshop-heading">
           <div>
-            <h1 className="text-lg font-semibold">主题库</h1>
-            <p className="mt-1 text-xs text-default-500">选择外观，或编辑并分享自己的设计。</p>
+            <h1>主题工坊</h1>
+            <p>选择外观，在每个页面中试用。也可以设计自己的主题。</p>
           </div>
-          <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="light"
-              isDisabled={busy}
-              onPress={() =>
-                void run(async () => {
-                  const value = await request<{ removed: number }>('pruneMedia')
-                  setNotice({ text: `已清理 ${value.removed} 个未被本地设计使用的媒体文件` })
-                })
-              }
-            >
-              清理未使用媒体
-            </Button>
+          <div className="flex flex-wrap gap-2">
+            <MaterialSettingsButton />
             <Button
               size="sm"
               variant="flat"
               isDisabled={busy}
-              onPress={() => setCommunityOpen(true)}
-            >
-              在线作品与收藏
-            </Button>
-            <Button
-              size="sm"
-              isDisabled={busy}
-              variant="bordered"
               startContent={<LuFolderInput />}
               onPress={() =>
                 void run(async () => {
-                  const imported = await request<DexTheme | null>('import')
-                  if (imported) {
+                  const value = await request<DexTheme | null>('import')
+                  if (value) {
                     await load()
                     setTab('local')
-                    setNotice({ text: `已导入「${imported.name}」` })
+                    setNotice({ text: `已导入「${value.name}」` })
                   }
                 })
               }
@@ -383,7 +298,6 @@ const DexThemes: React.FC = () => {
             <Button
               size="sm"
               color="primary"
-              isDisabled={busy || !catalog.builtins.length}
               startContent={<LuPlus />}
               onPress={() => openEditor()}
             >
@@ -391,219 +305,188 @@ const DexThemes: React.FC = () => {
             </Button>
           </div>
         </div>
-        {notice && !draft && !publishTheme && !serverOpen && (
-          <div
-            role="status"
-            className={`rounded-xl border px-4 py-3 text-sm ${notice.error ? 'border-danger/30 bg-danger/10 text-danger' : 'border-primary/20 bg-primary/5 text-foreground'}`}
-          >
-            {notice.text}
-          </div>
-        )}
-        <div className="flex flex-wrap items-center justify-between gap-2 border-b border-divider pb-2">
-          <div className="flex gap-1">
-            {(
-              [
-                ['builtins', '精选主题'],
-                ['local', '我的设计'],
-                ['remote', '在线主题库']
-              ] as const
-            ).map(([key, label]) => (
-              <Button
-                key={key}
-                size="sm"
-                variant={tab === key ? 'flat' : 'light'}
-                color={tab === key ? 'primary' : 'default'}
-                onPress={() => setTab(key)}
-              >
-                {label}
-                <span className="text-xs opacity-60">{catalog[key].length}</span>
-              </Button>
-            ))}
-          </div>
-          <Button
-            size="sm"
-            variant="light"
-            startContent={<LuSettings2 />}
-            onPress={() => {
-              setServerUrl(catalog.serverUrl)
-              setServerOpen(true)
-              setNotice(null)
-            }}
-          >
-            主题服务设置
-          </Button>
+        <div className="navio-workshop-tabs" role="tablist" aria-label="主题来源">
+          {(
+            [
+              ['official', '官方'],
+              ['local', '本地'],
+              ['online', '在线'],
+              ['favorites', '收藏'],
+              ['published', '发布']
+            ] as const
+          ).map(([key, label]) => (
+            <button role="tab" aria-selected={tab === key} key={key} onClick={() => setTab(key)}>
+              {label}
+            </button>
+          ))}
         </div>
-        {tab === 'remote' && (
-          <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-divider bg-content1 p-4">
-            <div className="min-w-0 text-sm">
-              <p className="break-all">{catalog.serverUrl || '尚未配置主题服务器'}</p>
-              <p
-                className={`mt-1 text-xs ${catalog.remoteError ? 'text-danger' : 'text-default-500'}`}
-              >
-                {catalog.remoteError || '只在你点击刷新后获取在线主题；代理订阅不会上传。'}
-              </p>
-            </div>
-            <Button
-              size="sm"
-              isDisabled={busy || !catalog.serverUrl}
-              startContent={<LuRefreshCw />}
-              onPress={() =>
-                void run(async () => {
-                  await refreshRemote()
-                  setNotice({ text: '在线主题库已更新' })
-                })
-              }
-            >
-              刷新主题
-            </Button>
-          </div>
+        {notice && !draft && !publishTheme && !serverOpen && (
+          <p role="status" className={notice.error ? 'navio-theme-error' : 'navio-theme-notice'}>
+            {notice.text}
+          </p>
         )}
-        {catalog[tab].length === 0 ? (
-          <div className="rounded-[20px] border border-dashed border-divider p-14 text-center">
-            <LuPalette className="mx-auto mb-4 text-3xl text-default-400" />
-            <h2 className="text-lg font-medium">
-              {tab === 'local'
-                ? '第一套设计，从你开始'
-                : tab === 'remote'
-                  ? '连接自己的主题库'
-                  : '正在读取主题'}
-            </h2>
-            <p className="mt-2 text-sm text-default-500">
-              {tab === 'local'
-                ? '从精选主题创建副本，或导入主题文件。'
-                : tab === 'remote'
-                  ? '填写部署好的服务地址，再刷新浏览远程设计。'
-                  : '请稍候。'}
-            </p>
-          </div>
-        ) : (
-          <div className="dex-theme-cards">
-            {catalog[tab].map((theme) => (
-              <article
-                key={theme.id}
-                className="min-w-0 overflow-hidden rounded-2xl border border-divider bg-content1 p-3"
+        {(tab === 'official' || tab === 'favorites') && (
+          <OfficialThemeWorkshop
+            favoritesOnly={tab === 'favorites'}
+            onCreate={(theme) => openEditor(theme)}
+          />
+        )}
+        {(tab === 'online' || tab === 'favorites' || tab === 'published') && (
+          <ThemeCommunity
+            key={tab}
+            embedded
+            initialScope={
+              tab === 'online' ? 'themes' : tab === 'favorites' ? 'favorite-themes' : 'my-themes'
+            }
+            onClose={() => {}}
+            onApplied={() => {
+              mutateAppConfig()
+              void load()
+            }}
+            onEdit={(theme) => openEditor(theme)}
+          />
+        )}
+        {tab === 'local' && (
+          <>
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <h2 className="text-base font-semibold">我的设计</h2>
+              <Button
+                size="sm"
+                variant="light"
+                isDisabled={busy}
+                onPress={() =>
+                  void run(async () => {
+                    const value = await request<{ removed: number }>('pruneMedia')
+                    setNotice({ text: `已清理 ${value.removed} 个未使用媒体文件` })
+                  })
+                }
               >
-                <Preview key={mediaRevision} theme={theme} />
-                {tab === 'remote' && theme.background && 'asset' in theme.background && (
-                  <Button
-                    size="sm"
-                    variant="light"
-                    isDisabled={busy}
-                    onPress={() =>
-                      void run(async () => {
-                        await request('loadMedia', { theme })
-                        setMediaRevision((value) => value + 1)
-                      })
-                    }
-                  >
-                    下载媒体预览
-                  </Button>
-                )}
-                <div className="mt-2.5 flex items-start justify-between gap-2">
-                  <div className="min-w-0">
-                    <h2 className="truncate text-sm font-semibold" title={theme.description}>
-                      {theme.name}
-                    </h2>
-                    <p className="mt-0.5 truncate text-[10px] text-default-500">
-                      {theme.author} · {theme.appearance === 'light' ? '浅色' : '深色'} ·{' '}
-                      {theme.radius}px
-                    </p>
+                清理未使用媒体
+              </Button>
+            </div>
+            {!catalog.local.length && (
+              <p className="text-sm text-default-500">
+                还没有本地设计。导入主题文件，或选择一套配色开始编辑。
+              </p>
+            )}
+            <div className="dex-theme-cards">
+              {[...catalog.local, ...catalog.builtins].map((theme) => (
+                <article key={theme.id} className="navio-local-theme navio-material-card">
+                  <Preview key={mediaRevision} theme={theme} />
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <h3>{theme.name}</h3>
+                      <p className="text-xs text-default-500">
+                        {theme.author}
+                        {catalog.builtins.some((t) => t.id === theme.id) ? ' · 经典配色' : ''}
+                      </p>
+                    </div>
+                    {activeId === theme.id && <LuCheck aria-label="使用中" />}
                   </div>
-                  {activeId === theme.id && (
-                    <span className="flex items-center gap-1 rounded-full bg-primary/10 px-2 py-1 text-[10px] text-primary">
-                      <LuCheck />
-                      使用中
-                    </span>
-                  )}
-                </div>
-                <div className="mt-2.5 flex items-center justify-between gap-2">
-                  <div className="flex gap-1.5" aria-label="主题配色">
-                    {(['bg', 'surfaceRaised', 'accent', 'text'] as const).map((key) => (
-                      <span
-                        key={key}
-                        className="h-3 w-3 rounded-full border border-divider"
-                        style={{ background: theme.colors[key] }}
-                      />
-                    ))}
-                  </div>
-                  <div className="flex gap-1">
+                  <div className="flex flex-wrap gap-1">
                     <Button
-                      isIconOnly
-                      title={tab === 'local' ? '编辑设计' : '创建设计副本'}
-                      aria-label={tab === 'local' ? '编辑设计' : '创建设计副本'}
                       size="sm"
                       variant="light"
+                      startContent={<LuPencil />}
                       isDisabled={busy}
-                      onPress={() => {
-                        if (tab === 'remote')
-                          void run(async () => {
-                            await request('loadMedia', { theme })
-                            openEditor(theme)
-                          })
-                        else openEditor(theme, tab === 'local')
-                      }}
+                      onPress={() =>
+                        openEditor(
+                          theme,
+                          catalog.local.some((t) => t.id === theme.id)
+                        )
+                      }
                     >
-                      <LuPencil />
+                      编辑
                     </Button>
                     <Button
-                      isIconOnly
-                      title="导出完整主题"
-                      aria-label="导出完整主题"
                       size="sm"
                       variant="light"
+                      startContent={<LuDownload />}
                       isDisabled={busy}
                       onPress={() =>
                         void run(async () => {
-                          const result = await request<{ saved: boolean } | null>('export', {
-                            id: theme.id
-                          })
-                          if (result) setNotice({ text: '主题文件已导出' })
+                          await request('export', { id: theme.id })
                         })
                       }
                     >
-                      <LuDownload />
+                      导出
                     </Button>
-                    {tab === 'local' && (
+                    {catalog.local.some((t) => t.id === theme.id) && (
                       <Button
-                        isIconOnly
-                        title="发布主题"
-                        aria-label="发布主题"
                         size="sm"
                         variant="light"
-                        isDisabled={busy}
-                        onPress={() => {
-                          setPublishTheme(theme)
-                          setNotice(null)
-                        }}
+                        startContent={<LuCloudUpload />}
+                        onPress={() => setPublishTheme(theme)}
                       >
-                        <LuCloudUpload />
+                        发布
                       </Button>
                     )}
                     <Button
-                      color="primary"
                       size="sm"
-                      variant={activeId === theme.id ? 'flat' : 'solid'}
+                      color="primary"
                       isDisabled={busy}
                       onPress={() =>
                         void run(async () => {
-                          await request('apply', { id: theme.id, source: tab })
-                          mutateAppConfig()
-                          await load()
-                          setNotice({ text: `已应用「${theme.name}」` })
+                          await request('trial', { id: theme.id })
+                          setNotice({ text: `正在试用「${theme.name}」` })
                         })
                       }
                     >
-                      {activeId === theme.id ? '重新应用' : '应用'}
+                      全窗试用
                     </Button>
                   </div>
-                </div>
-              </article>
-            ))}
-          </div>
+                </article>
+              ))}
+            </div>
+          </>
         )}
-        <p className="text-xs leading-relaxed text-default-400">
-          缩略图中的节点与延迟为布局示意。高级 CSS 编辑器保留在偏好设置中。
-        </p>
+        {tab === 'online' && (
+          <details className="navio-legacy-theme-service">
+            <summary>其他主题服务</summary>
+            <div className="flex flex-wrap gap-2 py-3">
+              <Button
+                size="sm"
+                variant="flat"
+                onPress={() => {
+                  setServerUrl(catalog.serverUrl)
+                  setServerOpen(true)
+                }}
+              >
+                主题服务设置
+              </Button>
+              <Button
+                size="sm"
+                variant="light"
+                isLoading={busy}
+                startContent={<LuRefreshCw />}
+                onPress={() => void run(refreshRemote)}
+              >
+                刷新旧版主题目录
+              </Button>
+            </div>
+            {catalog.remoteError && <p className="text-danger text-xs">{catalog.remoteError}</p>}
+            <div className="dex-theme-cards">
+              {catalog.remote.map((theme) => (
+                <article className="navio-local-theme" key={theme.id}>
+                  <Preview theme={theme} />
+                  <h3>{theme.name}</h3>
+                  <Button
+                    size="sm"
+                    onPress={() =>
+                      void run(async () => {
+                        await request('loadMedia', { theme })
+                        setMediaRevision((v) => v + 1)
+                        openEditor(theme)
+                      })
+                    }
+                  >
+                    下载并创建设计
+                  </Button>
+                </article>
+              ))}
+            </div>
+          </details>
+        )}
       </div>
 
       <Modal
@@ -990,7 +873,7 @@ const DexThemes: React.FC = () => {
                   await request('configure', { url: serverUrl.trim() })
                   await refreshRemote()
                   setServerOpen(false)
-                  setTab('remote')
+                  setTab('online')
                   setNotice({ text: '已连接在线主题库' })
                 })
               }

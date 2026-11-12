@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "orbit",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-orbit",
+      "name": "月光轨道",
+      "author": "D.E.X Studio",
+      "description": "三道轨迹沿不同角度运行，星点持续绕行，月光映入窗口表面。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#171926",
+        "surface": "#212436",
+        "surfaceRaised": "#2a2e46",
+        "border": "#40455e",
+        "text": "#ecedf4",
+        "muted": "#a5aac5",
+        "accent": "#909cdf",
+        "accentText": "#1a1e32",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#171926"] }
+    },
+    "light": {
+      "id": "navio-orbit",
+      "name": "月光轨道",
+      "author": "D.E.X Studio",
+      "description": "三道轨迹沿不同角度运行，星点持续绕行，月光映入窗口表面。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#e6e7f0",
+        "surface": "#f5f6f9",
+        "surfaceRaised": "#dcdeea",
+        "border": "#b6bad3",
+        "text": "#25293c",
+        "muted": "#565b7b",
+        "accent": "#2e3b85",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#e6e7f0"] }
+    }
+  }
+}

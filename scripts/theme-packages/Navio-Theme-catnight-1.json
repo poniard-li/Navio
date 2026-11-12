@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "catnight",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-catnight",
+      "name": "猫的夜班",
+      "author": "D.E.X Studio",
+      "description": "猫咪守着月光下的窗台。连接时抬头、断开时休息，鼠标和操作会引来它的注意。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#171b26",
+        "surface": "#212636",
+        "surfaceRaised": "#2a3146",
+        "border": "#40475e",
+        "text": "#eceef4",
+        "muted": "#a5acc5",
+        "accent": "#90a3df",
+        "accentText": "#1a2032",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#171b26"] }
+    },
+    "light": {
+      "id": "navio-catnight",
+      "name": "猫的夜班",
+      "author": "D.E.X Studio",
+      "description": "猫咪守着月光下的窗台。连接时抬头、断开时休息，鼠标和操作会引来它的注意。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#e6e8f0",
+        "surface": "#f5f6f9",
+        "surfaceRaised": "#dcdfea",
+        "border": "#b6bdd3",
+        "text": "#252b3c",
+        "muted": "#565f7b",
+        "accent": "#2e4285",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#e6e8f0"] }
+    }
+  }
+}

@@ -1,6 +1,11 @@
 import path from 'path'
 import { createHash } from 'crypto'
-import { dialog, type IpcMainInvokeEvent } from 'electron'
+import { dialog, nativeTheme, type IpcMainInvokeEvent } from 'electron'
+import {
+  officialThemeDefinition,
+  type OfficialThemeSettings,
+  type ThemeTrialState
+} from '../../shared/official-themes'
 import { ThemeService } from '../dex-legacy/theme-service.cjs'
 import {
   DEX_THEME_ACTIONS,
@@ -13,6 +18,7 @@ import { dataDir } from '../utils/dirs'
 import { mainWindow } from '../window'
 import { getAppConfig, patchAppConfig } from '../config'
 import { themeAssets, type ThemeAsset } from '../../shared/theme-media'
+import { OfficialThemeStore } from './official-themes'
 import { applyTheme, writeTheme } from './theme'
 import { dexAccountRequest, dexServerUrl, setDexServerUrl } from './dex-account'
 import {
@@ -24,6 +30,32 @@ import {
   pruneThemeMedia
 } from './theme-media'
 
+let officialLibrary: OfficialThemeStore | undefined
+let trial: { theme: DexTheme; settings: Record<string, OfficialThemeSettings> } | undefined
+function officialService(): OfficialThemeStore {
+  return (officialLibrary ??= new OfficialThemeStore(
+    path.join(dataDir(), 'dex-library', 'official')
+  ))
+}
+function trialState(): ThemeTrialState | null {
+  return trial
+    ? {
+        id: trial.theme.id,
+        name: trial.theme.name,
+        official: !!officialThemeDefinition(trial.theme.id)
+      }
+    : null
+}
+async function officialAppearance(id: string, input?: unknown): Promise<'dark' | 'light'> {
+  const settings = await officialService().settings(id)
+  return settings.appearance === 'system'
+    ? input === 'dark' || input === 'light'
+      ? input
+      : nativeTheme?.shouldUseDarkColors === false
+        ? 'light'
+        : 'dark'
+    : settings.appearance
+}
 let library: ThemeService | undefined
 let previewKey: string | undefined
 let previewTheme: DexTheme | undefined
@@ -36,12 +68,23 @@ function service(): ThemeService {
   })
   return library
 }
-async function clearPreview(): Promise<void> {
+async function clearPreview(resumeTrial = true): Promise<void> {
   if (previewKey && mainWindow && !mainWindow.isDestroyed())
     await mainWindow.webContents.removeInsertedCSS(previewKey).catch(() => {})
   previewKey = undefined
   previewTheme = undefined
+  if (resumeTrial && trial) {
+    await showPreview(trial.theme)
+    return
+  }
   mainWindow?.webContents.send('dexThemeBackground', null)
+}
+async function showPreview(theme: DexTheme): Promise<void> {
+  await clearPreview(false)
+  if (mainWindow && !mainWindow.isDestroyed())
+    previewKey = await mainWindow.webContents.insertCSS(dexThemeCss(theme))
+  previewTheme = theme
+  mainWindow?.webContents.send('dexThemeBackground', theme)
 }
 async function downloadAsset(asset: ThemeAsset): Promise<Uint8Array> {
   return (await dexAccountRequest(
@@ -69,11 +112,92 @@ async function catalog(): Promise<DexThemeCatalog> {
 }
 async function execute(action: string, payload: Record<string, unknown>): Promise<unknown> {
   if (action === 'list') return catalog()
+  if (action === 'officialCatalog')
+    return {
+      themes: await officialService().list(),
+      activeId: (await catalog()).selectedId,
+      trial: trialState()
+    }
+  if (action === 'trialState') return trialState()
+  if (action === 'installOfficial') {
+    if (typeof payload.id !== 'string') throw new Error('请选择主题')
+    await officialService().install(payload.id)
+    return { ok: true }
+  }
+  if (action === 'removeOfficial') {
+    if (typeof payload.id !== 'string') throw new Error('请选择主题')
+    if (trial?.theme.id === payload.id || (await catalog()).selectedId === payload.id)
+      throw new Error('请先切换到其他主题')
+    await officialService().remove(payload.id)
+    return { ok: true }
+  }
+  if (action === 'officialFavorite') {
+    if (typeof payload.id !== 'string' || typeof payload.favorite !== 'boolean')
+      throw new Error('收藏参数无效')
+    await officialService().favorite(payload.id, payload.favorite)
+    return { ok: true }
+  }
+  if (action === 'officialSettings') {
+    if (typeof payload.id !== 'string') throw new Error('请选择主题')
+    const settings = await officialService().settings(payload.id, payload.settings)
+    if (payload.settings !== undefined) {
+      if (trial?.theme.id === payload.id) {
+        trial.theme = await officialService().theme(
+          payload.id,
+          await officialAppearance(payload.id, payload.appearance)
+        )
+        await showPreview(trial.theme)
+      } else if ((await catalog()).selectedId === payload.id)
+        await execute('apply', { id: payload.id, appearance: payload.appearance })
+      mainWindow?.webContents.send('dexThemeBackground', null)
+    }
+    return settings
+  }
+  if (action === 'trial') {
+    if (typeof payload.id !== 'string') throw new Error('请选择主题')
+    let theme: DexTheme
+    if (officialThemeDefinition(payload.id))
+      theme = await officialService().theme(
+        payload.id,
+        await officialAppearance(payload.id, payload.appearance)
+      )
+    else theme = validateDexTheme(await service().find(payload.id))
+    await ensureThemeAssets(theme, downloadAsset)
+    const previous = trial?.settings || (await officialService().preferences()).settings
+    await showPreview(theme)
+    trial = { theme, settings: structuredClone(previous) }
+    mainWindow?.webContents.send('dexThemeBackground', theme)
+    return trialState()
+  }
+  if (action === 'restoreTrial') {
+    if (trial) await officialService().restoreSettings(trial.settings)
+    trial = undefined
+    await clearPreview(false)
+    return { ok: true }
+  }
+  if (action === 'keepTrial') {
+    if (!trial) throw new Error('当前没有正在试用的主题')
+    const selected = trial
+    try {
+      await execute('apply', { id: selected.theme.id, appearance: selected.theme.appearance })
+      trial = undefined
+      await clearPreview(false)
+    } catch (error) {
+      trial = selected
+      await showPreview(selected.theme)
+      throw error
+    }
+    return { ok: true }
+  }
   if (action === 'activeBackground') {
     if (previewTheme) return previewTheme
     const selected = /^dex-([a-z][a-z0-9-]{2,47})\.css$/.exec(
       (await getAppConfig()).customTheme || ''
     )?.[1]
+    if (selected && officialThemeDefinition(selected))
+      return officialService()
+        .theme(selected, await officialAppearance(selected))
+        .catch(() => null)
     return selected
       ? service()
           .find(selected)
@@ -95,6 +219,8 @@ async function execute(action: string, payload: Record<string, unknown>): Promis
   }
   if (action === 'import') {
     const theme = await importThemePackage()
+    if (theme && officialThemeDefinition(theme.id))
+      throw new Error('官方主题标识已保留，请修改主题 ID 后导入')
     return theme ? service().save({ theme }) : null
   }
   if (action === 'export') {
@@ -145,7 +271,7 @@ async function execute(action: string, payload: Record<string, unknown>): Promis
     const theme = validateDexTheme(payload.theme)
     const css = dexThemeCss(theme)
     await ensureThemeAssets(theme)
-    await clearPreview()
+    await clearPreview(false)
     if (mainWindow && !mainWindow.isDestroyed())
       previewKey = await mainWindow.webContents.insertCSS(css)
     previewTheme = theme
@@ -159,28 +285,41 @@ async function execute(action: string, payload: Record<string, unknown>): Promis
       if (!remote) throw new Error('远程主题已不在当前目录中，请刷新后重试')
       await service().save({ theme: validateDexTheme(remote) })
     }
-    const theme = validateDexTheme(await service().find(payload.id))
+    const official = officialThemeDefinition(payload.id)
+    const theme = official
+      ? await officialService().theme(
+          payload.id,
+          await officialAppearance(payload.id, payload.appearance)
+        )
+      : validateDexTheme(await service().find(payload.id))
     await ensureThemeAssets(theme, downloadAsset)
     const filename = `dex-${theme.id}.css`
     const config = await getAppConfig()
     const previous = { customTheme: config.customTheme || 'default.css', appTheme: config.appTheme }
     await writeTheme(filename, dexThemeCss(theme))
     try {
-      await patchAppConfig({ customTheme: filename, appTheme: theme.appearance })
-      await clearPreview()
+      await patchAppConfig({
+        customTheme: filename,
+        appTheme: official
+          ? (await officialService().settings(payload.id)).appearance
+          : theme.appearance
+      })
+      await clearPreview(false)
       await applyTheme(filename)
-      await service().apply({ id: theme.id })
+      if (!official) await service().apply({ id: theme.id })
     } catch (error) {
       await patchAppConfig(previous)
       await applyTheme(previous.customTheme)
       throw error
     }
+    trial = undefined
     mainWindow?.webContents.send('appConfigUpdated')
     mainWindow?.webContents.send('dexThemeBackground', null)
     return theme
   }
   if (action === 'save') {
     const theme = validateDexTheme(payload.theme)
+    if (officialThemeDefinition(theme.id)) throw new Error('请将官方主题另存为自己的设计')
     await ensureThemeAssets(theme, downloadAsset)
     return service().save({ theme })
   }

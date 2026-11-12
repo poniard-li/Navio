@@ -7,16 +7,17 @@ import {
   DrawerHeader,
   Input,
   Select,
-  SelectItem
+  SelectItem,
+  Switch
 } from '@heroui/react'
 import {
-  LuArrowDown,
-  LuArrowUp,
   LuArrowUpRight,
   LuCheck,
   LuChevronRight,
   LuPower,
   LuSearch,
+  LuShieldCheck,
+  LuGlobe,
   LuStar,
   LuWifi
 } from 'react-icons/lu'
@@ -28,6 +29,11 @@ import { useAppConfig } from '@renderer/hooks/use-app-config'
 import { useControledMihomoConfig } from '@renderer/hooks/use-controled-mihomo-config'
 import { useGroups } from '@renderer/hooks/use-groups'
 import { useProfileConfig } from '@renderer/hooks/use-profile-config'
+import { useNavioTraffic } from '@renderer/hooks/use-navio-traffic'
+import CumulativeTrafficChart, {
+  trafficBytes as bytes,
+  trafficDuration
+} from '@renderer/components/home/cumulative-traffic-chart'
 import {
   mihomoChangeProxy,
   mihomoCloseAllConnections,
@@ -36,23 +42,18 @@ import {
   updateTrayIcon
 } from '@renderer/utils/ipc'
 import '../assets/navio.css'
+import '../assets/navio-home-v7.css'
 import BaseConfirmModal from '@renderer/components/base/base-confirm-modal'
+import { bypassRules, normalizeBypass, usesGlobalBypass } from '../../../shared/dex-bypass'
 import {
   recommendationCandidates,
   recommendMeasuredNode
 } from '../../../shared/node-recommendation'
 
-function bytes(value: number): string {
-  if (!Number.isFinite(value) || value < 0) return '—'
-  if (value >= 1024 ** 3) return `${(value / 1024 ** 3).toFixed(1)} GB`
-  if (value >= 1024 ** 2) return `${(value / 1024 ** 2).toFixed(1)} MB`
-  if (value >= 1024) return `${(value / 1024).toFixed(1)} KB`
-  return `${Math.round(value)} B`
-}
-
 export default function Home(): React.JSX.Element {
   const navigate = useNavigate()
-  const { appConfig, patchAppConfig } = useAppConfig()
+  const { appConfig, patchAppConfig, mutateAppConfig } = useAppConfig()
+  const traffic = useNavioTraffic()
   const { profileConfig } = useProfileConfig()
   const { groups, mutate } = useGroups()
   const { controledMihomoConfig, patchControledMihomoConfig } = useControledMihomoConfig()
@@ -69,8 +70,7 @@ export default function Home(): React.JSX.Element {
     favorite: boolean
     context: string
   }>()
-  const [traffic, setTraffic] = useState({ up: 0, down: 0 })
-  const [samples, setSamples] = useState<number[]>(Array(40).fill(0))
+  const [savingBypass, setSavingBypass] = useState(false)
   const mode = controledMihomoConfig?.mode ?? 'rule'
   const connected = Boolean(appConfig?.sysProxy?.enable || controledMihomoConfig?.tun?.enable)
   const profile = profileConfig?.items?.find((item) => item.id === profileConfig.current)
@@ -108,23 +108,36 @@ export default function Home(): React.JSX.Element {
   const extra = profile?.extra
   const remaining =
     extra && extra.total > 0 ? Math.max(0, extra.total - extra.upload - extra.download) : undefined
-  const maxSample = Math.max(1, ...samples)
+  const bypass = useMemo(() => normalizeBypass(appConfig?.dexBypass), [appConfig?.dexBypass])
+  const bypassCount = bypass.presets.length + bypass.domains.length + bypass.processes.length
+  const bypassActive = usesGlobalBypass(mode, bypass)
+  const remainingPercent =
+    extra && extra.total > 0
+      ? Math.min(100, Math.max(0, ((remaining ?? 0) / extra.total) * 100))
+      : undefined
   useEffect(() => {
     setGroupName('')
   }, [mode])
-  const sparkline = samples
-    .map((value, index) => `${index * 8},${48 - (value / maxSample) * 42}`)
-    .join(' ')
-
-  useEffect(
-    () =>
-      window.electron.ipcRenderer.on('mihomoTraffic', (_event, ...args) => {
-        const value = args[0] as IMihomoTrafficInfo
-        setTraffic({ up: value.up, down: value.down })
-        setSamples((previous) => [...previous.slice(1), value.up + value.down])
-      }),
-    []
-  )
+  const toggleBypass = async (enabled: boolean): Promise<void> => {
+    const value = { ...bypass, enabled }
+    if (enabled && bypassRules(value).length === 0) {
+      navigate('/bypass')
+      toast.info('先选择需要直连的应用或网站，再开启全局例外。')
+      return
+    }
+    setSavingBypass(true)
+    try {
+      const result = await window.electron.ipcRenderer.invoke('saveDexBypass', value)
+      if (result && typeof result === 'object' && 'invokeError' in result)
+        throw new Error(String(result.invokeError))
+      mutateAppConfig()
+      await mutate()
+    } catch (error) {
+      toast.error(String(error))
+    } finally {
+      setSavingBypass(false)
+    }
+  }
 
   const toggleConnection = async (): Promise<void> => {
     if (!profile && !connected) {
@@ -144,6 +157,7 @@ export default function Home(): React.JSX.Element {
       }
       await updateTrayIcon()
       window.electron.ipcRenderer.send('updateTrayMenu')
+      window.dispatchEvent(new CustomEvent('navio-theme-feedback', { detail: 'connect' }))
     } catch (error) {
       toast.error(String(error))
     } finally {
@@ -159,6 +173,7 @@ export default function Home(): React.JSX.Element {
       await mutate()
       window.electron.ipcRenderer.send('updateTrayMenu')
       toast.success(`已切换至 ${name}`)
+      window.dispatchEvent(new CustomEvent('navio-theme-feedback', { detail: 'node' }))
       return true
     } catch (error) {
       toast.error(String(error))
@@ -187,6 +202,7 @@ export default function Home(): React.JSX.Element {
       })
     )
     setTesting(false)
+    window.dispatchEvent(new CustomEvent('navio-theme-feedback', { detail: 'latency' }))
   }
   const findRecommendation = async (): Promise<void> => {
     if (!group || group.type !== 'Selector' || testing) return
@@ -229,36 +245,51 @@ export default function Home(): React.JSX.Element {
 
   return (
     <BasePage title="概览" header={<span className="navio-header-label">你的网络，由你决定</span>}>
-      <div className="navio-home">
-        <header className="navio-home-heading">
+      <div className="navio-v7-home">
+        <header className="navio-v7-heading">
           <div>
-            <p className="navio-eyebrow">NAVIO / WORKSPACE</p>
-            <h1>连接，就在眼前。</h1>
+            <h1>网络概览</h1>
+            <p>连接、节点与用量，尽在此处。</p>
           </div>
           <span className="navio-status" data-connected={connected}>
             <i />
             {connected ? '已接入' : '未连接'}
           </span>
         </header>
-        <section className="navio-connection" aria-label="连接控制">
-          <div className="navio-connection-top">
-            <div>
-              <span className="navio-eyebrow">当前连接</span>
+        <section className="navio-v7-connection navio-material-card" aria-label="连接控制">
+          <div className="navio-v7-connection-main">
+            <div className="navio-v7-connect-status">
+              <span className="navio-v7-kicker">当前连接</span>
               <h2>
                 {connected
                   ? controledMihomoConfig?.tun?.enable
                     ? 'TUN 已开启'
                     : '系统代理已开启'
-                  : '准备好，出发。'}
+                  : '尚未连接'}
               </h2>
               <p>
-                {connected
-                  ? '接管范围取决于当前方式，路由按照所选模式运行。'
-                  : '导入你的订阅，选择节点，一键连接。'}
+                {connected ? (
+                  <>
+                    <span data-live-metric>{trafficDuration(traffic.session.elapsedMs)}</span>
+                    <span>
+                      {' '}
+                      ·{' '}
+                      {traffic.coreRunning
+                        ? appConfig?.sysProxy?.enable && controledMihomoConfig?.tun?.enable
+                          ? '系统代理 + TUN'
+                          : '按所选路由模式运行'
+                        : '等待内核就绪'}
+                    </span>
+                  </>
+                ) : profile ? (
+                  '选择节点后即可连接'
+                ) : (
+                  '先导入订阅或本地配置'
+                )}
               </p>
             </div>
             <button
-              className="navio-power"
+              className="navio-v7-power"
               data-connected={connected}
               disabled={busy}
               onClick={() => void toggleConnection()}
@@ -268,29 +299,49 @@ export default function Home(): React.JSX.Element {
               <span>{busy ? '处理中' : connected ? '断开' : '连接'}</span>
             </button>
           </div>
-          <div className="navio-control-row">
-            <div>
-              <span className="navio-eyebrow">路由模式</span>
+          <div className="navio-v7-node-mode">
+            <button
+              className="navio-v7-current-node"
+              onClick={() => setOpen(true)}
+              disabled={!group}
+            >
+              <LuWifi />
+              <span>
+                <small>{group ? `当前策略组 · ${group.name}` : '当前节点'}</small>
+                <strong>
+                  {mode === 'direct' ? '直连模式' : group?.now || '导入订阅后选择节点'}
+                </strong>
+              </span>
+              <span className="navio-v7-node-latency">
+                {currentDelay && currentDelay > 0 && mode !== 'direct'
+                  ? `${currentDelay} ms`
+                  : '切换'}
+                <LuChevronRight />
+              </span>
+            </button>
+            <div className="navio-v7-mode">
+              <span className="navio-v7-kicker">路由模式</span>
               <OutboundModeSwitcher />
             </div>
-            <button className="navio-tun-link" onClick={() => navigate('/tun')}>
-              TUN 设置 <LuArrowUpRight />
+          </div>
+          <div className="navio-v7-bypass">
+            <Switch
+              size="sm"
+              isSelected={bypass.enabled}
+              isDisabled={savingBypass}
+              onValueChange={(enabled) => void toggleBypass(enabled)}
+            >
+              全局例外
+            </Switch>
+            <span>
+              {!bypass.enabled ? '已关闭' : bypassActive ? '全局模式生效' : '仅在全局模式生效'} ·
+              已选 {bypassCount} 项
+            </span>
+            <button onClick={() => navigate('/bypass')}>
+              设置 <LuChevronRight />
             </button>
           </div>
         </section>
-        <button className="navio-node-summary" onClick={() => setOpen(true)} disabled={!group}>
-          <span className="navio-node-icon">
-            <LuWifi />
-          </span>
-          <span>
-            <small>{group ? `当前策略组 · ${group.name}` : '尚无可用节点'}</small>
-            <strong>{mode === 'direct' ? '直连模式' : group?.now || '导入订阅后选择节点'}</strong>
-          </span>
-          <span className="navio-node-delay">
-            {currentDelay && currentDelay > 0 ? `${currentDelay} ms` : '选择节点'}
-            <LuChevronRight />
-          </span>
-        </button>
         {unhealthy && mode !== 'direct' && (
           <div className="navio-notice" role="status">
             <span>当前节点的最近检测未成功。你可以测速后选择可用节点，出口 IP 可能随之改变。</span>
@@ -310,50 +361,69 @@ export default function Home(): React.JSX.Element {
             </Button>
           </div>
         )}
-        <section className="navio-telemetry" aria-label="实时流量">
-          <div>
-            <span>
-              <LuArrowDown /> 下载
-            </span>
-            <strong>
-              {bytes(traffic.down)}
-              <small>/s</small>
+        <div className="navio-v7-statistics">
+          <CumulativeTrafficChart state={traffic} />
+          <section className="navio-v7-subscription navio-material-card" aria-label="当前订阅余量">
+            <div className="navio-v7-card-heading">
+              <h2>当前订阅</h2>
+              <button onClick={() => navigate('/profiles')} aria-label="管理订阅">
+                <LuArrowUpRight />
+              </button>
+            </div>
+            <strong className="navio-v7-profile-name" title={profile?.name}>
+              {profile?.name || '还没有订阅'}
             </strong>
-          </div>
-          <div>
-            <span>
-              <LuArrowUp /> 上传
-            </span>
-            <strong>
-              {bytes(traffic.up)}
-              <small>/s</small>
+            <span className="navio-v7-kicker">剩余流量</span>
+            <strong className="navio-v7-quota" data-live-metric>
+              {remaining === undefined ? '—' : bytes(remaining)}
             </strong>
-          </div>
-          <svg viewBox="0 0 312 52" role="img" aria-label="最近流量趋势">
-            <polyline points={sparkline} fill="none" stroke="currentColor" strokeWidth="2" />
-          </svg>
-        </section>
-        <section className="navio-profile-summary">
-          <div>
-            <span className="navio-eyebrow">当前订阅</span>
-            <strong>{profile?.name || '还没有订阅'}</strong>
+            <div
+              className="navio-v7-quota-track"
+              role={remainingPercent === undefined ? undefined : 'progressbar'}
+              aria-label="订阅剩余流量"
+              aria-valuenow={remainingPercent}
+              aria-valuemin={0}
+              aria-valuemax={100}
+            >
+              <i style={{ width: `${remainingPercent ?? 0}%` }} />
+            </div>
+            <div className="navio-v7-subscription-detail">
+              <span>套餐总量</span>
+              <strong>{extra?.total ? bytes(extra.total) : '未提供'}</strong>
+              <span>到期时间</span>
+              <strong>
+                {extra?.expire ? new Date(extra.expire * 1000).toLocaleDateString() : '未提供'}
+              </strong>
+            </div>
             <p>
               {remaining === undefined
-                ? '服务商未提供用量数据'
-                : `剩余 ${bytes(remaining)} / ${bytes(extra?.total ?? 0)}`}
-              {extra?.expire ? ` · ${new Date(extra.expire * 1000).toLocaleDateString()} 到期` : ''}
+                ? profile
+                  ? '当前配置未提供套餐用量。'
+                  : '支持订阅链接和本地配置。'
+                : '由订阅服务商提供，与本机累计用量分开统计。'}
             </p>
-          </div>
-          <Button variant="light" onPress={() => navigate('/profiles')}>
-            {profile ? '管理订阅' : '导入订阅'} <LuArrowUpRight />
-          </Button>
-        </section>
-        <footer className="navio-home-footer">
-          <button onClick={() => navigate('/bypass')}>
-            全局直连例外 <LuChevronRight />
+            <Button size="sm" variant="flat" onPress={() => navigate('/profiles')}>
+              {profile ? '管理订阅' : '导入订阅'}
+              <LuChevronRight />
+            </Button>
+          </section>
+        </div>
+        <footer className="navio-v7-shortcuts">
+          <button onClick={() => navigate('/tun')}>
+            <LuShieldCheck />
+            <span>TUN</span>
+            <small>{controledMihomoConfig?.tun?.enable ? '已开启' : '未开启'}</small>
+            <LuChevronRight />
+          </button>
+          <button onClick={() => navigate('/network')}>
+            <LuGlobe />
+            <span>网络信息</span>
+            <LuChevronRight />
           </button>
           <button onClick={() => navigate('/connections')}>
-            查看当前连接 <LuChevronRight />
+            <LuWifi />
+            <span>当前连接</span>
+            <LuChevronRight />
           </button>
         </footer>
       </div>

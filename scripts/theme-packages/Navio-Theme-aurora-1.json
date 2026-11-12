@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "aurora",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-aurora",
+      "name": "流动极光",
+      "author": "D.E.X Studio",
+      "description": "整幅背景在窗口底层缓慢流动，颜色透过侧栏和面板。功能位置保持一致。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#172626",
+        "surface": "#213636",
+        "surfaceRaised": "#2a4646",
+        "border": "#405e5e",
+        "text": "#ecf4f4",
+        "muted": "#a5c5c5",
+        "accent": "#90dfdf",
+        "accentText": "#1a3232",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#172626"] }
+    },
+    "light": {
+      "id": "navio-aurora",
+      "name": "流动极光",
+      "author": "D.E.X Studio",
+      "description": "整幅背景在窗口底层缓慢流动，颜色透过侧栏和面板。功能位置保持一致。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#e6f0f0",
+        "surface": "#f5f9f9",
+        "surfaceRaised": "#dceaea",
+        "border": "#b6d3d3",
+        "text": "#253c3c",
+        "muted": "#567b7b",
+        "accent": "#2e8585",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#e6f0f0"] }
+    }
+  }
+}

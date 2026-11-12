@@ -1,3 +1,5 @@
+@import './navio-material.css';
+
 :root {
   --dex-accent: #91c1b4;
   --dex-sidebar: #172327;
@@ -60,9 +62,10 @@
   display: flex;
   align-items: baseline;
   gap: 7px;
-  font-size: 19px;
+  font-family: 'Arial Rounded MT Bold', 'Nunito', 'Segoe UI Variable', 'Segoe UI', sans-serif;
+  font-size: 21px;
   font-weight: 650;
-  letter-spacing: 0.015em;
+  letter-spacing: -0.035em;
   white-space: nowrap;
 }
 .dex-brand-word small {
@@ -184,6 +187,32 @@
 }
 .dex-nav-heading svg[data-expanded='true'] {
   transform: none;
+}
+.dex-nav-heading .dex-group-icon {
+  width: 15px;
+  height: 15px;
+  margin-right: 9px;
+  flex-shrink: 0;
+  transform: none;
+}
+.dex-nav-heading > span {
+  flex: 1;
+}
+.dex-command-trigger {
+  width: 100%;
+  text-align: left;
+  cursor: pointer;
+}
+.dex-command-trigger > span {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 12px;
+}
+.dex-command-trigger:hover {
+  border-color: var(--dex-accent);
 }
 .dex-nav-item {
   display: flex;

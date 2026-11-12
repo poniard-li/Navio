@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "eclipse",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-eclipse",
+      "name": "日食",
+      "author": "D.E.X Studio",
+      "description": "月影慢慢掠过日冕，光环明暗随遮挡变化，背景保持持续运动。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#201726",
+        "surface": "#2e2136",
+        "surfaceRaised": "#3b2a46",
+        "border": "#52405e",
+        "text": "#f0ecf4",
+        "muted": "#b8a5c5",
+        "accent": "#bf90df",
+        "accentText": "#291a32",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#201726"] }
+    },
+    "light": {
+      "id": "navio-eclipse",
+      "name": "日食",
+      "author": "D.E.X Studio",
+      "description": "月影慢慢掠过日冕，光环明暗随遮挡变化，背景保持持续运动。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#ece6f0",
+        "surface": "#f8f5f9",
+        "surfaceRaised": "#e4dcea",
+        "border": "#c7b6d3",
+        "text": "#33253c",
+        "muted": "#6c567b",
+        "accent": "#622e85",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#ece6f0"] }
+    }
+  }
+}

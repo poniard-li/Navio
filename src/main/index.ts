@@ -3,6 +3,12 @@ import { promisify } from 'util'
 import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { app, dialog, ipcMain } from 'electron'
 import { initI18n } from '../shared/i18n'
+import {
+  startNavioTrafficTelemetry,
+  stopNavioTrafficTelemetry,
+  subscribeNavioTraffic
+} from './traffic/navio-live'
+import { startMotionEnvironment } from './resolve/motion-environment'
 import { registerIpcMainHandlers } from './utils/ipc'
 import { getAppConfig, patchAppConfig, subscribeAppConfig } from './config'
 import {
@@ -280,6 +286,16 @@ app
     })
 
     registerIpcMainHandlers()
+    startMotionEnvironment(() => mainWindow)
+    startNavioTrafficTelemetry()
+    const unsubscribeNavioTraffic = subscribeNavioTraffic((state) => {
+      if (mainWindow && !mainWindow.isDestroyed())
+        mainWindow.webContents.send('navioTrafficState', state)
+    })
+    app.once('before-quit', () => {
+      unsubscribeNavioTraffic()
+      stopNavioTrafficTelemetry()
+    })
 
     try {
       await createWindow()

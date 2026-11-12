@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "festival",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-festival",
+      "name": "新岁",
+      "author": "D.E.X Studio",
+      "description": "朱砂与暖金贯穿侧栏、选中状态及按钮。灯影在窗口边缘轻轻晃动，纸纹融入表面。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#261a17",
+        "surface": "#362521",
+        "surfaceRaised": "#46302a",
+        "border": "#5e4640",
+        "text": "#f4edec",
+        "muted": "#c5aba5",
+        "accent": "#dfa090",
+        "accentText": "#321f1a",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#261a17"] }
+    },
+    "light": {
+      "id": "navio-festival",
+      "name": "新岁",
+      "author": "D.E.X Studio",
+      "description": "朱砂与暖金贯穿侧栏、选中状态及按钮。灯影在窗口边缘轻轻晃动，纸纹融入表面。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#f0e8e6",
+        "surface": "#f9f6f5",
+        "surfaceRaised": "#eadfdc",
+        "border": "#d3bcb6",
+        "text": "#3c2a25",
+        "muted": "#7b5d56",
+        "accent": "#853f2e",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#f0e8e6"] }
+    }
+  }
+}

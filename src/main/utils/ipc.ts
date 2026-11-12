@@ -3,6 +3,8 @@ import v8 from 'v8'
 import { readFile } from 'fs/promises'
 import { app, ipcMain, session } from 'electron'
 import i18next from 'i18next'
+import { getNavioTrafficState, resetNavioTrafficUsage } from '../traffic/navio-live'
+import { getMotionEnvironment } from '../resolve/motion-environment'
 import { getGeoResourceStatus, downloadGeoResources } from '../resolve/geo-resources'
 import {
   ipInfoProviderForUrl,
@@ -312,6 +314,8 @@ const asyncHandlers: Record<string, AsyncFn> = {
   ) => (await import('../resolve/dex-account')).dexAccountAction(...args),
   saveDexBypass: async (value: unknown) =>
     (await import('../resolve/dex-bypass')).saveDexBypass(value),
+  getMotionEnvironment: async () => getMotionEnvironment(),
+  getNavioTrafficState: async () => getNavioTrafficState(),
   // Mihomo API
   mihomoVersion,
   mihomoCloseConnection,
@@ -321,7 +325,10 @@ const asyncHandlers: Record<string, AsyncFn> = {
   queryTrafficUsageOverview,
   queryTrafficUsageBreakdown,
   importTrafficUsage,
-  clearTrafficUsage,
+  clearTrafficUsage: async () => {
+    if (!__LEGACY_BUILD__) await clearTrafficUsage()
+    resetNavioTrafficUsage()
+  },
   mihomoProxies,
   mihomoGroups,
   mihomoProxyProviders,

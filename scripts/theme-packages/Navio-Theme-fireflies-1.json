@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "fireflies",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-fireflies",
+      "name": "萤火",
+      "author": "D.E.X Studio",
+      "description": "微光在草木剪影之间各自游动，窗口下缘保留安静的林地轮廓。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#17261f",
+        "surface": "#21362c",
+        "surfaceRaised": "#2a4639",
+        "border": "#405e50",
+        "text": "#ecf4f0",
+        "muted": "#a5c5b6",
+        "accent": "#90dfb9",
+        "accentText": "#1a3227",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#17261f"] }
+    },
+    "light": {
+      "id": "navio-fireflies",
+      "name": "萤火",
+      "author": "D.E.X Studio",
+      "description": "微光在草木剪影之间各自游动，窗口下缘保留安静的林地轮廓。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#e6f0eb",
+        "surface": "#f5f9f7",
+        "surfaceRaised": "#dceae3",
+        "border": "#b6d3c5",
+        "text": "#253c31",
+        "muted": "#567b69",
+        "accent": "#2e855b",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#e6f0eb"] }
+    }
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "mystery",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-mystery",
+      "name": "Navio × D.E.X Mystery",
+      "author": "D.E.X Studio",
+      "description": "D.E.X 自有产品联名。包装纸、烫金丝带、礼盒和飘动彩纸覆盖整个窗口，连接时礼盒展开，操作时带来轻快反馈。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#221726",
+        "surface": "#312136",
+        "surfaceRaised": "#3f2a46",
+        "border": "#57405e",
+        "text": "#f2ecf4",
+        "muted": "#bda5c5",
+        "accent": "#cb90df",
+        "accentText": "#2c1a32",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#221726"] }
+    },
+    "light": {
+      "id": "navio-mystery",
+      "name": "Navio × D.E.X Mystery",
+      "author": "D.E.X Studio",
+      "description": "D.E.X 自有产品联名。包装纸、烫金丝带、礼盒和飘动彩纸覆盖整个窗口，连接时礼盒展开，操作时带来轻快反馈。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#ede6f0",
+        "surface": "#f8f5f9",
+        "surfaceRaised": "#e6dcea",
+        "border": "#ccb6d3",
+        "text": "#36253c",
+        "muted": "#72567b",
+        "accent": "#6f2e85",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#ede6f0"] }
+    }
+  }
+}

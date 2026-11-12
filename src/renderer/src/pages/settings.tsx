@@ -10,17 +10,26 @@ import SubStoreConfig from '@renderer/components/settings/substore-config'
 import LocalBackupConfig from '@renderer/components/settings/local-backup-config'
 import { useTranslation } from 'react-i18next'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
-import { useNavigate } from 'react-router-dom'
+import { Navigate, useNavigate, useSearchParams } from 'react-router-dom'
 import { version } from '@renderer/utils/init'
-import AccountConfig from '@renderer/components/settings/account-config'
 import NavioToolsConfig from '@renderer/components/settings/navio-tools-config'
 import CfwMigration from '@renderer/components/settings/cfw-migration'
+import { MaterialSettingsButton } from '@renderer/components/dex/material-settings'
 import { PRODUCT_NAME, DEVELOPER_NAME, formatProductVersion } from '../../../shared/product'
 
 const Settings: React.FC = () => {
   const { t } = useTranslation()
   const { appConfig, patchAppConfig } = useAppConfig()
   const navigate = useNavigate()
+  const [searchParams, setSearchParams] = useSearchParams()
+  const requestedTab = searchParams.get('tab') || 'general'
+  const selectedTab = ['general', 'appearance', 'shortcuts', 'data', 'advanced', 'about'].includes(
+    requestedTab
+  )
+    ? requestedTab
+    : 'general'
+
+  if (requestedTab === 'account') return <Navigate to="/account" replace />
 
   return (
     <BasePage
@@ -39,9 +48,21 @@ const Settings: React.FC = () => {
         aria-label="设置分类"
         variant="underlined"
         classNames={{ base: 'px-3 sticky top-0 z-10 bg-background', panel: 'pt-1' }}
+        selectedKey={selectedTab}
+        onSelectionChange={(key) =>
+          setSearchParams(
+            (current) => {
+              const next = new URLSearchParams(current)
+              if (key === 'general') next.delete('tab')
+              else next.set('tab', String(key))
+              return next
+            },
+            { replace: true }
+          )
+        }
       >
         <Tab key="general" title="通用">
-          <div className="m-3 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-default-200 p-5">
+          <div className="navio-material-card m-3 flex flex-wrap items-center justify-between gap-4 rounded-xl border border-default-200 p-5">
             <div>
               <h3 className="font-medium">使用指南</h3>
               <p className="mt-1 text-small text-default-500">
@@ -63,7 +84,16 @@ const Settings: React.FC = () => {
           <GeneralConfig />
         </Tab>
         <Tab key="appearance" title="界面">
-          <div className="m-3 rounded-xl border border-default-200 p-5 space-y-4">
+          <div className="navio-material-card m-3 rounded-xl border border-default-200 p-5 space-y-4">
+            <div className="flex flex-wrap items-center justify-between gap-4">
+              <div>
+                <h3 className="font-medium">窗口材质与动效</h3>
+                <p className="text-small text-default-500 mt-1">
+                  侧栏、卡片和弹窗分别设置，切换主题时保留。
+                </p>
+              </div>
+              <MaterialSettingsButton>调节材质</MaterialSettingsButton>
+            </div>
             <div className="flex items-center justify-between gap-4">
               <div>
                 <h3 className="font-medium">主题工坊</h3>
@@ -101,16 +131,13 @@ const Settings: React.FC = () => {
           <LocalBackupConfig />
           <WebdavConfig />
         </Tab>
-        <Tab key="account" title="账号">
-          <AccountConfig />
-        </Tab>
         <Tab key="advanced" title="高级">
           <CfwMigration />
           <NavioToolsConfig />
           <MihomoConfig />
         </Tab>
         <Tab key="about" title="关于">
-          <div className="m-3 rounded-xl border border-default-200 px-6 py-12 text-center">
+          <div className="navio-material-card m-3 rounded-xl border border-default-200 px-6 py-12 text-center">
             <h3 className="text-4xl tracking-tight font-semibold">{PRODUCT_NAME}</h3>
             <p className="text-sm text-default-500 mt-4">{formatProductVersion(version)}</p>
             <p className="text-xs text-default-500 mt-3">Built by {DEVELOPER_NAME}</p>

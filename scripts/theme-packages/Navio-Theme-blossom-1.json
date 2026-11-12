@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "blossom",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-blossom",
+      "name": "春日来信",
+      "author": "D.E.X Studio",
+      "description": "轻薄花瓣从枝头飘落，淡粉与新绿铺进窗口和控件表面。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#26171c",
+        "surface": "#362128",
+        "surfaceRaised": "#462a34",
+        "border": "#5e404b",
+        "text": "#f4ecef",
+        "muted": "#c5a5b0",
+        "accent": "#df90ac",
+        "accentText": "#321a23",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#26171c"] }
+    },
+    "light": {
+      "id": "navio-blossom",
+      "name": "春日来信",
+      "author": "D.E.X Studio",
+      "description": "轻薄花瓣从枝头飘落，淡粉与新绿铺进窗口和控件表面。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#f0e6e9",
+        "surface": "#f9f5f7",
+        "surfaceRaised": "#eadce1",
+        "border": "#d3b6c0",
+        "text": "#3c252d",
+        "muted": "#7b5663",
+        "accent": "#852e4c",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#f0e6e9"] }
+    }
+  }
+}

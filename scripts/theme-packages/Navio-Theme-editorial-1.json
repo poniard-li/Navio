@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "editorial",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-editorial",
+      "name": "书页",
+      "author": "D.E.X Studio",
+      "description": "衬线标题与正文形成明确层次，原有速率、时长和余量保持等宽排列。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#21201c",
+        "surface": "#2f2d27",
+        "surfaceRaised": "#3d3a33",
+        "border": "#5e5440",
+        "text": "#f4f1ec",
+        "muted": "#c5baa5",
+        "accent": "#dfc590",
+        "accentText": "#322a1a",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#21201c"] }
+    },
+    "light": {
+      "id": "navio-editorial",
+      "name": "书页",
+      "author": "D.E.X Studio",
+      "description": "衬线标题与正文形成明确层次，原有速率、时长和余量保持等宽排列。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#ecebe9",
+        "surface": "#f8f8f7",
+        "surfaceRaised": "#e5e4e0",
+        "border": "#cac6bf",
+        "text": "#3c3425",
+        "muted": "#7b6f56",
+        "accent": "#85682e",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#ecebe9"] }
+    }
+  }
+}

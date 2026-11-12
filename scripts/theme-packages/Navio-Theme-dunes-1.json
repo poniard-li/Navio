@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "dunes",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-dunes",
+      "name": "流沙",
+      "author": "D.E.X Studio",
+      "description": "三层沙丘轮廓缓慢错位，流动的明暗让起伏清晰可见。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#261e17",
+        "surface": "#362b21",
+        "surfaceRaised": "#46382a",
+        "border": "#5e4f40",
+        "text": "#f4f0ec",
+        "muted": "#c5b5a5",
+        "accent": "#dfb690",
+        "accentText": "#32261a",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#261e17"] }
+    },
+    "light": {
+      "id": "navio-dunes",
+      "name": "流沙",
+      "author": "D.E.X Studio",
+      "description": "三层沙丘轮廓缓慢错位，流动的明暗让起伏清晰可见。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#f0eae6",
+        "surface": "#f9f7f5",
+        "surfaceRaised": "#eae3dc",
+        "border": "#d3c4b6",
+        "text": "#3c3025",
+        "muted": "#7b6856",
+        "accent": "#85582e",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#f0eae6"] }
+    }
+  }
+}

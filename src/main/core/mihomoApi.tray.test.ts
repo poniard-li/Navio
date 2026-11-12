@@ -41,6 +41,10 @@ vi.mock('../window', () => ({ mainWindow: null }))
 vi.mock('../resolve/floatingWindow', () => ({ floatingWindow: null }))
 vi.mock('../config', () => ({}))
 vi.mock('../traffic/recorder', () => ({ recordTrafficUsage: vi.fn() }))
+vi.mock('../traffic/navio-live', () => ({
+  recordNavioTrafficRate: vi.fn(),
+  recordNavioTrafficTotals: vi.fn()
+}))
 vi.mock('../utils/logger', () => ({
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() })
 }))

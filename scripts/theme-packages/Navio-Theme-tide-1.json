@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "tide",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-tide",
+      "name": "潮汐",
+      "author": "D.E.X Studio",
+      "description": "多层潮线缓慢推进，浅蓝色水光随之移动。整幅海面贯穿工作区。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#172126",
+        "surface": "#212f36",
+        "surfaceRaised": "#2a3d46",
+        "border": "#40555e",
+        "text": "#ecf1f4",
+        "muted": "#a5bbc5",
+        "accent": "#90c6df",
+        "accentText": "#1a2b32",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#172126"] }
+    },
+    "light": {
+      "id": "navio-tide",
+      "name": "潮汐",
+      "author": "D.E.X Studio",
+      "description": "多层潮线缓慢推进，浅蓝色水光随之移动。整幅海面贯穿工作区。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#e6ecf0",
+        "surface": "#f5f8f9",
+        "surfaceRaised": "#dce6ea",
+        "border": "#b6cad3",
+        "text": "#25353c",
+        "muted": "#566f7b",
+        "accent": "#2e6985",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#e6ecf0"] }
+    }
+  }
+}

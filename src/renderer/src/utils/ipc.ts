@@ -616,3 +616,10 @@ export const applyCfwMigration = (
   importedOverrides: { id: string; name: string }[]
   warnings: string[]
 }> => invoke('applyCfwMigration', planId, selection)
+
+export const getMotionEnvironment = (): Promise<
+  import('../../../shared/navio-material').NavioMotionEnvironment
+> => invoke('getMotionEnvironment')
+export const getNavioTrafficState = (): Promise<
+  import('../../../shared/navio-live').NavioTrafficState
+> => invoke('getNavioTrafficState')

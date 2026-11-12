@@ -1,4 +1,4 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import type { IconType } from 'react-icons'
 import {
   LuActivity,
@@ -13,6 +13,7 @@ import {
   LuGlobe,
   LuHouse,
   LuLayers,
+  LuLayoutDashboard,
   LuListFilter,
   LuNetwork,
   LuPalette,
@@ -24,8 +25,8 @@ import {
   LuShieldCheck,
   LuSlidersHorizontal,
   LuTerminal,
-  LuWaypoints,
-  LuX
+  LuUserRound,
+  LuWaypoints
 } from 'react-icons/lu'
 import { DndContext } from '@dnd-kit/core'
 import { SortableContext } from '@dnd-kit/sortable'
@@ -98,7 +99,7 @@ export const navigationGroups: {
       {
         path: '/bypass',
         key: 'dex.bypass',
-        fallback: '直连例外',
+        fallback: '全局例外',
         english: 'Direct exceptions',
         keywords: '全局 微信 抖音 应用 网站 绕过 直连 bypass global exceptions',
         icon: LuShieldCheck
@@ -203,7 +204,7 @@ export const navigationGroups: {
       {
         path: '/tun',
         key: 'sider.cards.tun',
-        fallback: '虚拟网卡',
+        fallback: 'TUN',
         english: 'TUN',
         keywords: '虚拟网卡 tun vpn stack 路由',
         icon: LuShieldCheck,
@@ -231,12 +232,12 @@ export const navigationGroups: {
 
 export const utilityItems: NavigationItem[] = [
   {
-    path: '/help',
-    key: 'dex.help',
-    fallback: '使用指南',
-    english: 'Help',
-    keywords: '帮助 解释 术语 隐私 新手 ISP ASN Smart 引导 help guide privacy',
-    icon: LuBookOpen
+    path: '/account',
+    key: 'dex.account',
+    fallback: 'D.E.X 账号',
+    english: 'D.E.X account',
+    keywords: '账号 邮箱 手机 登录 安全 绑定 account security login',
+    icon: LuUserRound
   },
   {
     path: '/dex-themes',
@@ -253,6 +254,14 @@ export const utilityItems: NavigationItem[] = [
     english: 'Settings',
     keywords: '设置 备份 快捷键 启动 关于 更新 settings backup shortcut update',
     icon: LuSettings2
+  },
+  {
+    path: '/help',
+    key: 'dex.help',
+    fallback: '使用指南',
+    english: 'Help',
+    keywords: '帮助 解释 术语 隐私 新手 ISP ASN Smart 引导 help guide privacy',
+    icon: LuBookOpen
   }
 ]
 
@@ -276,25 +285,11 @@ export default function DexSidebar({
   const { profileConfig } = useProfileConfig()
   const { pathname } = useLocation()
   const navigate = useNavigate()
-  const [query, setQuery] = useState('')
   const [showAdvanced, setShowAdvanced] = useState(false)
   const [openGroups, setOpenGroups] = useState<Record<string, boolean>>({ workspace: true })
-  const searchRef = useRef<HTMLInputElement>(null)
-  const navigationRef = useRef<HTMLElement>(null)
-  const pendingSearchFocus = useRef(false)
-  const search = query.trim().toLocaleLowerCase()
+  const searchRef = useRef<HTMLButtonElement>(null)
   const title = (item: NavigationItem): string =>
     t(item.key, { defaultValue: text(item.fallback, item.english) })
-  const matches = (item: NavigationItem): boolean =>
-    !search ||
-    `${title(item)} ${item.english} ${item.path} ${item.keywords}`
-      .toLocaleLowerCase()
-      .includes(search)
-  const allItems = useMemo(
-    () => [...navigationGroups.flatMap((group) => group.items), ...utilityItems],
-    []
-  )
-  const filteredItems = allItems.filter(matches)
   const selectedProfile = profileConfig?.items?.find((item) => item.id === profileConfig.current)
   const simpleMode = appConfig?.operationMode === 'simple'
 
@@ -327,44 +322,8 @@ export default function DexSidebar({
       )
   }, [pathname])
 
-  useEffect(() => {
-    if (!collapsed && pendingSearchFocus.current) {
-      pendingSearchFocus.current = false
-      searchRef.current?.focus()
-      searchRef.current?.select()
-    }
-  }, [collapsed])
-
-  useEffect(() => {
-    const focusSearch = (): void => {
-      if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
-      if (collapsed) {
-        pendingSearchFocus.current = true
-        onCollapsedChange(false)
-      } else {
-        searchRef.current?.focus()
-        searchRef.current?.select()
-      }
-    }
-    const handleShortcut = (event: KeyboardEvent): void => {
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'k') {
-        // A modal owns its keyboard until dismissed; do not move focus behind it.
-        if (document.querySelector('[role="dialog"][aria-modal="true"]')) return
-        event.preventDefault()
-        focusSearch()
-      }
-    }
-    window.addEventListener('keydown', handleShortcut)
-    window.addEventListener('dex-open-search', focusSearch)
-    return () => {
-      window.removeEventListener('keydown', handleShortcut)
-      window.removeEventListener('dex-open-search', focusSearch)
-    }
-  }, [collapsed, onCollapsedChange])
-
   const visit = (path: string): void => {
     navigate(path)
-    setQuery('')
   }
 
   const renderItem = (item: NavigationItem): React.JSX.Element => {
@@ -413,67 +372,25 @@ export default function DexSidebar({
       </div>
 
       <div className="dex-search-wrap">
-        {collapsed ? (
-          <button
-            className="dex-search-trigger"
-            type="button"
-            aria-label={text('搜索功能', 'Search features')}
-            title={`${text('搜索功能', 'Search features')} · ${platform === 'darwin' ? '⌘' : 'Ctrl'} K`}
-            onClick={() => {
-              pendingSearchFocus.current = true
-              onCollapsedChange(false)
-            }}
-          >
-            <LuSearch />
-          </button>
-        ) : (
-          <div className="dex-search-field">
-            <LuSearch aria-hidden="true" />
-            <input
-              ref={searchRef}
-              type="search"
-              value={query}
-              placeholder={text('搜索全部功能', 'Search all features')}
-              aria-label={text('搜索全部功能', 'Search all features')}
-              aria-controls="dex-navigation"
-              onChange={(event) => setQuery(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === 'Escape') {
-                  event.preventDefault()
-                  setQuery('')
-                }
-                if (event.key === 'ArrowDown') {
-                  event.preventDefault()
-                  navigationRef.current
-                    ?.querySelector<HTMLButtonElement>('[data-dex-route]')
-                    ?.focus()
-                }
-                if (event.key === 'Enter' && search && filteredItems[0]) {
-                  event.preventDefault()
-                  visit(filteredItems[0].path)
-                }
-              }}
-            />
-            {query ? (
-              <button
-                type="button"
-                aria-label={text('清除搜索', 'Clear search')}
-                onClick={() => {
-                  setQuery('')
-                  searchRef.current?.focus()
-                }}
-              >
-                <LuX />
-              </button>
-            ) : (
+        <button
+          ref={searchRef}
+          className={collapsed ? 'dex-search-trigger' : 'dex-search-field dex-command-trigger'}
+          type="button"
+          aria-label={text('搜索功能、节点和订阅', 'Search features, proxies and profiles')}
+          title={text('搜索', 'Search') + ' · ' + (platform === 'darwin' ? '⌘ K' : 'Ctrl K')}
+          onClick={() => window.dispatchEvent(new Event('dex-open-search'))}
+        >
+          <LuSearch aria-hidden="true" />
+          {!collapsed && (
+            <>
+              <span>{text('搜索功能、节点…', 'Search features, proxies…')}</span>
               <kbd>{platform === 'darwin' ? '⌘ K' : 'Ctrl K'}</kbd>
-            )}
-          </div>
-        )}
+            </>
+          )}
+        </button>
       </div>
 
       <nav
-        ref={navigationRef}
         id="dex-navigation"
         className="dex-navigation custom-scrollbar"
         aria-label={text('功能', 'Features')}
@@ -484,7 +401,6 @@ export default function DexSidebar({
           )
           const current = buttons.indexOf(document.activeElement as HTMLButtonElement)
           if (event.key === 'Escape') {
-            setQuery('')
             searchRef.current?.focus()
             event.preventDefault()
             return
@@ -503,29 +419,33 @@ export default function DexSidebar({
       >
         {navigationGroups.map((group) => {
           const items = group.items.filter(
-            (item) =>
-              matches(item) &&
-              (!simpleMode || showAdvanced || search || SIMPLE_PATHS.includes(item.path))
+            (item) => !simpleMode || showAdvanced || SIMPLE_PATHS.includes(item.path)
           )
           if (!items.length) return null
-          const expanded = collapsed || Boolean(search) || openGroups[group.id]
+          const expanded = Boolean(openGroups[group.id])
+          const GroupIcon =
+            group.id === 'workspace'
+              ? LuLayoutDashboard
+              : group.id === 'configuration'
+                ? LuLayers
+                : LuNetwork
           return (
-            <section className="dex-nav-group" key={group.id}>
-              {!collapsed && (
-                <button
-                  className="dex-nav-heading"
-                  type="button"
-                  aria-expanded={expanded}
-                  aria-controls={`dex-group-${group.id}`}
-                  onClick={() =>
-                    setOpenGroups((previous) => ({ ...previous, [group.id]: !expanded }))
-                  }
-                  disabled={Boolean(search)}
-                >
-                  <span>{text(group.label, group.english)}</span>
-                  <LuChevronDown data-expanded={expanded} aria-hidden="true" />
-                </button>
-              )}
+            <section className="dex-nav-group" key={group.id} data-group={group.id}>
+              <button
+                className="dex-nav-heading"
+                type="button"
+                aria-expanded={expanded}
+                aria-controls={`dex-group-${group.id}`}
+                aria-label={text(group.label, group.english)}
+                title={collapsed ? text(group.label, group.english) : undefined}
+                onClick={() =>
+                  setOpenGroups((previous) => ({ ...previous, [group.id]: !expanded }))
+                }
+              >
+                <GroupIcon className="dex-group-icon" aria-hidden="true" />
+                <span>{text(group.label, group.english)}</span>
+                <LuChevronDown data-expanded={expanded} aria-hidden="true" />
+              </button>
               {expanded && (
                 <div id={`dex-group-${group.id}`} className="dex-nav-items">
                   {items.map(renderItem)}
@@ -534,7 +454,7 @@ export default function DexSidebar({
             </section>
           )
         })}
-        {simpleMode && !search && (
+        {simpleMode && (
           <button
             type="button"
             className="dex-nav-heading mt-3"
@@ -552,19 +472,6 @@ export default function DexSidebar({
             </span>
             {!collapsed && <LuChevronDown data-expanded={showAdvanced} aria-hidden="true" />}
           </button>
-        )}
-        {search && utilityItems.filter(matches).length > 0 && (
-          <section className="dex-nav-group">
-            <div className="dex-search-section-label">{text('应用', 'Application')}</div>
-            {utilityItems.filter(matches).map(renderItem)}
-          </section>
-        )}
-        {search && (
-          <p className="dex-search-result" role="status">
-            {filteredItems.length
-              ? text(`${filteredItems.length} 项功能`, `${filteredItems.length} features`)
-              : text('没有找到匹配功能', 'No matching features')}
-          </p>
         )}
       </nav>
 

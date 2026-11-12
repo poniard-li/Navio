@@ -1,0 +1,138 @@
+.navio-v7-proxies {
+  padding: 0 8px 8px;
+}
+.navio-v7-proxy-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 8px 4px;
+  flex-shrink: 0;
+}
+.navio-v7-proxy-search {
+  max-width: 360px;
+  flex: 1;
+  min-width: 120px;
+}
+.navio-v7-proxy-toolbar > span {
+  margin-left: auto;
+  color: hsl(var(--heroui-default-500));
+  font-size: 11px;
+  white-space: nowrap;
+}
+.navio-v7-proxy-group {
+  border: 1px solid hsl(var(--heroui-default-200));
+  border-radius: 12px;
+  box-shadow: none;
+  background: hsl(var(--heroui-content1));
+}
+.navio-v7-proxy-node {
+  border: 1px solid hsl(var(--heroui-default-200));
+  border-radius: 10px;
+  background: hsl(var(--heroui-content1));
+  transition:
+    border-color 0.15s,
+    background 0.15s;
+}
+.navio-v7-proxy-node[data-selected='true'] {
+  border-color: hsl(var(--heroui-primary) / 0.75);
+  background: hsl(var(--heroui-primary) / 0.07);
+}
+.navio-v7-proxy-node[data-fixed='true'] {
+  border-color: hsl(var(--heroui-secondary));
+}
+.navio-v7-proxy-node-body {
+  padding: 9px 10px 5px;
+  overflow: hidden;
+}
+.navio-v7-proxy-node-main {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+}
+.navio-v7-proxy-select {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  flex: 1;
+  min-width: 0;
+  min-height: 25px;
+  font-size: 13px;
+  font-weight: 550;
+  text-align: left;
+}
+.navio-v7-proxy-select > span {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+}
+.navio-v7-proxy-select > svg {
+  flex-shrink: 0;
+  color: hsl(var(--heroui-primary));
+}
+.navio-v7-proxy-favorite {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+  border-radius: 6px;
+  color: hsl(var(--heroui-default-400));
+}
+.navio-v7-proxy-favorite[aria-pressed='true'] {
+  color: hsl(var(--heroui-warning));
+}
+.navio-v7-proxy-node-details {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  min-height: 29px;
+}
+.navio-v7-proxy-protocols {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+  overflow: hidden;
+  align-items: center;
+  font-size: 9px;
+  color: hsl(var(--heroui-default-500));
+  white-space: nowrap;
+}
+.navio-v7-proxy-protocols > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.navio-v7-proxy-protocols > span:not(:first-child) {
+  font-size: 8px;
+  background: hsl(var(--heroui-default-100));
+  border-radius: 3px;
+  padding: 1px 3px;
+}
+.navio-v7-proxy-latency {
+  min-width: 52px;
+  width: auto;
+  height: 26px;
+  padding: 0 5px;
+  font-size: 11px;
+  font-variant-numeric: tabular-nums;
+  flex-shrink: 0;
+}
+.navio-v7-proxy-unpin {
+  width: 24px;
+  min-width: 24px;
+  height: 24px;
+  font-size: 11px;
+}
+.navio-v7-proxy-select:focus-visible,
+.navio-v7-proxy-favorite:focus-visible {
+  outline: 2px solid hsl(var(--heroui-primary));
+  outline-offset: 2px;
+}
+@media (max-width: 720px) {
+  .navio-v7-proxies {
+    padding-inline: 2px;
+  }
+  .navio-v7-proxy-toolbar > span {
+    display: none;
+  }
+}

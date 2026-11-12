@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "mysterynight",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-mysterynight",
+      "name": "Mystery · 午夜派对",
+      "author": "D.E.X Studio",
+      "description": "D.E.X Mystery 的午夜配色。彩纸、灯带与礼盒组成整个窗口的场景，连接与操作带来短暂回应。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#201726",
+        "surface": "#2d2136",
+        "surfaceRaised": "#3a2a46",
+        "border": "#52405e",
+        "text": "#f0ecf4",
+        "muted": "#b8a5c5",
+        "accent": "#be90df",
+        "accentText": "#281a32",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#201726"] }
+    },
+    "light": {
+      "id": "navio-mysterynight",
+      "name": "Mystery · 午夜派对",
+      "author": "D.E.X Studio",
+      "description": "D.E.X Mystery 的午夜配色。彩纸、灯带与礼盒组成整个窗口的场景，连接与操作带来短暂回应。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#ebe6f0",
+        "surface": "#f8f5f9",
+        "surfaceRaised": "#e4dcea",
+        "border": "#c7b6d3",
+        "text": "#32253c",
+        "muted": "#6c567b",
+        "accent": "#612e85",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#ebe6f0"] }
+    }
+  }
+}

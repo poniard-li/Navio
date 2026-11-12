@@ -9,6 +9,7 @@ export const DEX_BYPASS_PRESETS = [
   {
     id: 'wechat',
     name: '微信',
+    category: '社交通讯',
     description: '桌面微信与常用微信网页',
     processes: ['WeChat.exe', 'Weixin.exe', 'WeChatAppEx.exe'],
     domains: ['weixin.qq.com', 'wechat.com', 'weixinbridge.com']
@@ -16,6 +17,7 @@ export const DEX_BYPASS_PRESETS = [
   {
     id: 'douyin',
     name: '抖音',
+    category: '视频直播',
     description: '抖音客户端、网页与常用视频域名',
     processes: ['douyin.exe'],
     domains: ['douyin.com', 'douyinvod.com', 'douyincdn.com']
@@ -23,6 +25,7 @@ export const DEX_BYPASS_PRESETS = [
   {
     id: 'bilibili',
     name: '哔哩哔哩',
+    category: '视频直播',
     description: '哔哩哔哩网页与常用视频域名',
     processes: [],
     domains: ['bilibili.com', 'bilivideo.com']
@@ -30,9 +33,282 @@ export const DEX_BYPASS_PRESETS = [
   {
     id: 'cloudmusic',
     name: '网易云音乐',
+    category: '音乐音频',
     description: '桌面网易云音乐与音乐域名',
     processes: ['cloudmusic.exe'],
     domains: ['music.163.com', 'music.126.net']
+  },
+  {
+    id: 'qq',
+    name: 'QQ',
+    category: '社交通讯',
+    description: '所列客户端进程与官网域名',
+    processes: ['QQ.exe', 'QQNT.exe'],
+    domains: ['im.qq.com', 'qzone.qq.com', 'qlogo.cn']
+  },
+  {
+    id: 'wecom',
+    name: '企业微信',
+    category: '办公会议',
+    description: '所列客户端进程与官网域名',
+    processes: ['WXWork.exe'],
+    domains: ['work.weixin.qq.com']
+  },
+  {
+    id: 'meeting',
+    name: '腾讯会议',
+    category: '办公会议',
+    description: '所列客户端进程与官网域名',
+    processes: ['WeMeet.exe', 'wemeetapp.exe'],
+    domains: ['meeting.tencent.com', 'meeting.qq.com']
+  },
+  {
+    id: 'dingtalk',
+    name: '钉钉',
+    category: '办公会议',
+    description: '所列客户端进程与官网域名',
+    processes: ['DingTalk.exe'],
+    domains: ['dingtalk.com', 'dingding.xin']
+  },
+  {
+    id: 'feishu',
+    name: '飞书',
+    category: '办公会议',
+    description: '所列客户端进程与官网域名',
+    processes: ['Feishu.exe'],
+    domains: ['feishu.cn', 'feishucdn.com']
+  },
+  {
+    id: 'wps',
+    name: 'WPS Office',
+    category: '办公会议',
+    description: '所列客户端进程与官网域名',
+    processes: ['wps.exe', 'et.exe', 'wpp.exe'],
+    domains: ['wps.cn', 'wps.com', 'kdocs.cn']
+  },
+  {
+    id: 'tencentdocs',
+    name: '腾讯文档',
+    category: '办公会议',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['docs.qq.com']
+  },
+  {
+    id: 'wegame',
+    name: 'WeGame',
+    category: '游戏',
+    description: '所列客户端进程与官网域名',
+    processes: ['wegame.exe', 'WeGameLauncher.exe', 'tgp_daemon.exe'],
+    domains: ['wegame.com.cn', 'wegame.com']
+  },
+  {
+    id: 'tencentgames',
+    name: '腾讯国内游戏服务',
+    category: '游戏',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['lol.qq.com', 'dnf.qq.com', 'cf.qq.com', 'speed.qq.com', 'game.qq.com']
+  },
+  {
+    id: 'qqmusic',
+    name: 'QQ 音乐',
+    category: '音乐音频',
+    description: '所列客户端进程与官网域名',
+    processes: ['QQMusic.exe'],
+    domains: ['y.qq.com', 'qqmusic.qq.com', 'gtimg.cn']
+  },
+  {
+    id: 'kugou',
+    name: '酷狗音乐',
+    category: '音乐音频',
+    description: '所列客户端进程与官网域名',
+    processes: ['KuGou.exe'],
+    domains: ['kugou.com']
+  },
+  {
+    id: 'kuwo',
+    name: '酷我音乐',
+    category: '音乐音频',
+    description: '所列客户端进程与官网域名',
+    processes: ['KwMusic.exe'],
+    domains: ['kuwo.cn']
+  },
+  {
+    id: 'ximalaya',
+    name: '喜马拉雅',
+    category: '音乐音频',
+    description: '所列客户端进程与官网域名',
+    processes: ['Ximalaya.exe'],
+    domains: ['ximalaya.com', 'xmcdn.com']
+  },
+  {
+    id: 'tencentvideo',
+    name: '腾讯视频',
+    category: '视频直播',
+    description: '所列客户端进程与官网域名',
+    processes: ['QQLive.exe'],
+    domains: ['v.qq.com', 'video.qq.com']
+  },
+  {
+    id: 'iqiyi',
+    name: '爱奇艺',
+    category: '视频直播',
+    description: '所列客户端进程与官网域名',
+    processes: ['QyClient.exe', 'QyVideo.exe'],
+    domains: ['iqiyi.com', 'iqiyipic.com', 'qiyi.com']
+  },
+  {
+    id: 'youku',
+    name: '优酷',
+    category: '视频直播',
+    description: '所列客户端进程与官网域名',
+    processes: ['Youku.exe'],
+    domains: ['youku.com', 'ykimg.com']
+  },
+  {
+    id: 'mango',
+    name: '芒果 TV',
+    category: '视频直播',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['mgtv.com', 'hitv.com']
+  },
+  {
+    id: 'kuaishou',
+    name: '快手',
+    category: '视频直播',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['kuaishou.com', 'gifshow.com']
+  },
+  {
+    id: 'huya',
+    name: '虎牙直播',
+    category: '视频直播',
+    description: '所列客户端进程与官网域名',
+    processes: ['HuyaClient.exe'],
+    domains: ['huya.com']
+  },
+  {
+    id: 'douyu',
+    name: '斗鱼直播',
+    category: '视频直播',
+    description: '所列客户端进程与官网域名',
+    processes: ['DouyuLive.exe'],
+    domains: ['douyu.com', 'douyucdn.cn']
+  },
+  {
+    id: 'jd',
+    name: '京东',
+    category: '购物生活',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['jd.com', '360buyimg.com']
+  },
+  {
+    id: 'taobao',
+    name: '淘宝 / 天猫',
+    category: '购物生活',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['taobao.com', 'tmall.com', 'tb.cn']
+  },
+  {
+    id: 'pdd',
+    name: '拼多多',
+    category: '购物生活',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['pinduoduo.com', 'yangkeduo.com']
+  },
+  {
+    id: 'vip',
+    name: '唯品会',
+    category: '购物生活',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['vip.com', 'vipstatic.com']
+  },
+  {
+    id: 'suning',
+    name: '苏宁易购',
+    category: '购物生活',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['suning.com', 'suning.cn']
+  },
+  {
+    id: 'meituan',
+    name: '美团 / 大众点评',
+    category: '购物生活',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['meituan.com', 'dianping.com']
+  },
+  {
+    id: 'eleme',
+    name: '饿了么',
+    category: '购物生活',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['ele.me']
+  },
+  {
+    id: 'alipay',
+    name: '支付宝',
+    category: '购物生活',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['alipay.com']
+  },
+  {
+    id: 'xiaohongshu',
+    name: '小红书',
+    category: '社交通讯',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['xiaohongshu.com', 'xhscdn.com']
+  },
+  {
+    id: 'weibo',
+    name: '微博',
+    category: '社交通讯',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['weibo.com', 'weibo.cn']
+  },
+  {
+    id: 'baidupan',
+    name: '百度网盘',
+    category: '网盘工具',
+    description: '所列客户端进程与官网域名',
+    processes: ['BaiduNetdisk.exe'],
+    domains: ['pan.baidu.com', 'yun.baidu.com']
+  },
+  {
+    id: 'aliyundrive',
+    name: '阿里云盘',
+    category: '网盘工具',
+    description: '所列客户端进程与官网域名',
+    processes: ['aDrive.exe'],
+    domains: ['aliyundrive.com', 'alipan.com']
+  },
+  {
+    id: 'quark',
+    name: '夸克网盘',
+    category: '网盘工具',
+    description: '所列客户端进程与官网域名',
+    processes: ['QuarkCloudDrive.exe'],
+    domains: ['pan.quark.cn']
+  },
+  {
+    id: 'tencentcloud',
+    name: '腾讯微云 / 邮箱',
+    category: '网盘工具',
+    description: '所列客户端进程与官网域名',
+    processes: [],
+    domains: ['weiyun.com', 'mail.qq.com', 'exmail.qq.com']
   }
 ] as const
 
@@ -59,7 +335,7 @@ function list(value: unknown, label: string): string[] {
 
 export function normalizeBypass(value?: unknown): DexBypassConfig {
   if (value !== undefined && (!value || typeof value !== 'object' || Array.isArray(value)))
-    throw new Error('直连例外配置格式无效')
+    throw new Error('全局例外配置格式无效')
   const input = (value || {}) as Partial<DexBypassConfig>
   const presets = unique(list(input.presets, '内建项目'))
   if (presets.some((id) => !DEX_BYPASS_PRESETS.some((item) => item.id === id)))

@@ -395,6 +395,7 @@ interface IAppConfig {
   rememberSelectedSiderCard?: boolean
   lockSiderCards?: boolean
   siderWidth: number
+  navioMaterial?: import('./navio-material').NavioMaterialSettings
   appTheme: AppTheme
   customTheme?: string
   autoCheckUpdate: boolean

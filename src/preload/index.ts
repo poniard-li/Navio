@@ -2,6 +2,8 @@ import { contextBridge, ipcRenderer, webUtils } from 'electron'
 
 // 允许的 invoke channels 白名单
 const validInvokeChannels = [
+  'getMotionEnvironment',
+  'getNavioTrafficState',
   'previewCfwMigration',
   'applyCfwMigration',
   'launchProxyTerminal',
@@ -223,6 +225,8 @@ const validInvokeChannels = [
 
 // 允许的 on/removeListener channels 白名单
 const validListenChannels = [
+  'motionEnvironmentUpdated',
+  'navioTrafficState',
   'mihomoLogs',
   'mihomoConnections',
   'mihomoTraffic',

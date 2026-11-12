@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { Button, Chip, Switch, Textarea } from '@heroui/react'
+import { Button, Chip, Switch, Textarea, Input, Select, SelectItem } from '@heroui/react'
 import { LuArrowUpRight, LuCheck, LuGlobe, LuMonitor, LuShieldCheck } from 'react-icons/lu'
 import BasePage from '@renderer/components/base/base-page'
 import { useAppConfig } from '@renderer/hooks/use-app-config'
@@ -24,6 +24,16 @@ export default function BypassPage(): React.JSX.Element {
   const { controledMihomoConfig } = useControledMihomoConfig()
   const navigate = useNavigate()
   const [enabled, setEnabled] = useState(false)
+  const [query, setQuery] = useState('')
+  const [category, setCategory] = useState('全部')
+  const categories = ['全部', ...new Set(DEX_BYPASS_PRESETS.map((p) => p.category))]
+  const shownPresets = DEX_BYPASS_PRESETS.filter(
+    (p) =>
+      (category === '全部' || p.category === category) &&
+      `${p.name} ${p.domains.join(' ')} ${p.processes.join(' ')}`
+        .toLowerCase()
+        .includes(query.toLowerCase())
+  )
   const [presets, setPresets] = useState<string[]>([])
   const [processes, setProcesses] = useState('')
   const [domains, setDomains] = useState('')
@@ -67,7 +77,7 @@ export default function BypassPage(): React.JSX.Element {
   }
   return (
     <BasePage
-      title="直连例外"
+      title="全局例外"
       header={
         <Button
           className="app-nodrag"
@@ -96,7 +106,7 @@ export default function BypassPage(): React.JSX.Element {
               </p>
             </div>
             <Switch
-              aria-label="启用全局直连例外"
+              aria-label="启用全局例外"
               isSelected={enabled}
               onValueChange={(value) => {
                 setEnabled(value)
@@ -128,8 +138,33 @@ export default function BypassPage(): React.JSX.Element {
           <p className="mb-3 text-xs leading-5 text-default-500">
             默认均不选中。内建条目是可查看的起点，无法覆盖应用将来新增的所有域名；可以在下方补充。
           </p>
+          <div className="flex flex-wrap gap-3 mb-4">
+            <Input
+              aria-label="搜索应用与网站"
+              placeholder="搜索应用、进程或域名"
+              className="flex-1 min-w-48"
+              value={query}
+              onValueChange={setQuery}
+              isClearable
+            />
+            <Select
+              aria-label="应用分类"
+              className="w-40"
+              selectedKeys={[category]}
+              disallowEmptySelection
+              onSelectionChange={(keys) => setCategory(String(Array.from(keys)[0]))}
+            >
+              {categories.map((value) => (
+                <SelectItem key={value}>{value}</SelectItem>
+              ))}
+            </Select>
+            <span className="self-center text-xs text-default-500">已选 {presets.length} 项</span>
+          </div>
+          <p className="mb-3 text-xs text-default-500">
+            进程例外作用于该程序的全部连接；域名例外匹配列出的域名及子域名。若只希望指定网站直连，可只填写下方域名。
+          </p>
           <div className="grid grid-cols-1 gap-3 xl:grid-cols-2">
-            {DEX_BYPASS_PRESETS.map((preset) => (
+            {shownPresets.map((preset) => (
               <div key={preset.id} className="rounded-xl border border-divider bg-content1 p-4">
                 <Switch
                   classNames={{

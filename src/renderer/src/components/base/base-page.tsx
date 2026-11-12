@@ -5,6 +5,7 @@ import { isAlwaysOnTop, setAlwaysOnTop } from '@renderer/utils/ipc'
 import React, { forwardRef, useEffect, useImperativeHandle, useRef, useState } from 'react'
 import { RiPushpin2Fill, RiPushpin2Line } from 'react-icons/ri'
 import { useTranslation } from 'react-i18next'
+import ThemeTrialBar from '@renderer/components/dex/theme-trial-bar'
 
 interface Props {
   title?: React.ReactNode
@@ -44,8 +45,8 @@ const BasePage = forwardRef<HTMLDivElement, Props>((props, ref) => {
   })
 
   return (
-    <div ref={contentRef} className="w-full h-full">
-      <div className="sticky top-0 z-40 h-12.25 w-full bg-background">
+    <div ref={contentRef} className="navio-page w-full h-full">
+      <div className="navio-page-titlebar sticky top-0 z-40 h-12.25 w-full bg-background">
         <div className="app-drag p-2 flex justify-between h-12">
           <div className="title min-w-0 h-full truncate whitespace-nowrap text-lg leading-8">
             {props.title}
@@ -76,7 +77,10 @@ const BasePage = forwardRef<HTMLDivElement, Props>((props, ref) => {
 
         <Divider />
       </div>
-      <div className="content h-[calc(100vh-49px)] overflow-y-auto custom-scrollbar">
+      <ThemeTrialBar />
+      <div
+        className={`content navio-page-content overflow-y-auto custom-scrollbar ${props.contentClassName || ''}`}
+      >
         {props.children}
       </div>
     </div>

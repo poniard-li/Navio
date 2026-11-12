@@ -1,0 +1,47 @@
+{
+  "schema": 1,
+  "scene": "cloud",
+  "revision": 1,
+  "variants": {
+    "dark": {
+      "id": "navio-cloud",
+      "name": "云海",
+      "author": "D.E.X Studio",
+      "description": "前后两层云带以不同速度穿过窗口，天光在云间慢慢变化。",
+      "appearance": "dark",
+      "radius": 14,
+      "colors": {
+        "bg": "#171e26",
+        "surface": "#212a36",
+        "surfaceRaised": "#2a3746",
+        "border": "#404e5e",
+        "text": "#eceff4",
+        "muted": "#a5b3c5",
+        "accent": "#90b4df",
+        "accentText": "#1a2532",
+        "success": "#81cfac"
+      },
+      "background": { "type": "solid", "colors": ["#171e26"] }
+    },
+    "light": {
+      "id": "navio-cloud",
+      "name": "云海",
+      "author": "D.E.X Studio",
+      "description": "前后两层云带以不同速度穿过窗口，天光在云间慢慢变化。",
+      "appearance": "light",
+      "radius": 14,
+      "colors": {
+        "bg": "#e6eaf0",
+        "surface": "#f5f7f9",
+        "surfaceRaised": "#dce2ea",
+        "border": "#b6c3d3",
+        "text": "#252f3c",
+        "muted": "#56677b",
+        "accent": "#2e5585",
+        "accentText": "#ffffff",
+        "success": "#32815d"
+      },
+      "background": { "type": "solid", "colors": ["#e6eaf0"] }
+    }
+  }
+}

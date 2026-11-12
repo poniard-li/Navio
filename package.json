@@ -1,6 +1,6 @@
 {
   "name": "navio-desktop",
-  "version": "1.0.0-beta.6",
+  "version": "1.0.0-beta.7",
   "description": "Navio desktop client by D.E.X Studio, based on Clash Party and Mihomo",
   "type": "module",
   "main": "./out/main/index.js",

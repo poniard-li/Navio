@@ -11,6 +11,7 @@ import {
 } from '../utils/logFile'
 import { setAppLogDisabled } from '../utils/logger'
 import { normalizeBypass } from '../../shared/dex-bypass'
+import { normalizeNavioMaterial } from '../../shared/navio-material'
 
 let appConfig: IAppConfig // config.yaml
 const appConfigWriteQueue = new WriteQueue()
@@ -41,6 +42,7 @@ export async function getAppConfig(force = false): Promise<IAppConfig> {
         mergedConfig.modeSelected = true
         mergedConfig.operationMode = 'standard'
       }
+      mergedConfig.navioMaterial = normalizeNavioMaterial(mergedConfig.navioMaterial)
       mergedConfig.maxLogFileSize = normalizeMaxLogFileSizeMB(mergedConfig.maxLogFileSize)
       if (JSON.stringify(mergedConfig) !== JSON.stringify(parsedConfig)) {
         await atomicWriteFile(appConfigPath(), stringify(mergedConfig))
@@ -79,6 +81,7 @@ async function writeAppConfig(
     }
     if (Object.prototype.hasOwnProperty.call(patch, 'dexBypass'))
       nextConfig.dexBypass = normalizeBypass(patch.dexBypass)
+    nextConfig.navioMaterial = normalizeNavioMaterial(nextConfig.navioMaterial)
     nextConfig.maxLogFileSize = normalizeMaxLogFileSizeMB(nextConfig.maxLogFileSize)
     try {
       await atomicWriteFile(appConfigPath(), stringify(nextConfig))
