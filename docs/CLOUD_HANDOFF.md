@@ -207,7 +207,7 @@ node scripts/release-windows.cjs "<Party 参考包解压目录>" "<不存在的�
 - Windows 打包安全 / 路径测试 10 项通过；新 QA 工具的 8 项入口 / 路径测试通过，格式检查通过。参数化后的 QA 工具尚未重新启动 EXE 或运行完整烟测。
 - 新云检查入口的 8 项隔离回归测试、Node 语法与工作流触发 / 权限检查通过；没有把模拟命令分支检查称为 Linux 安装成功。
 - 独立设计副本在 Edge 检查概览、代理组、订阅、连接、用量、日志、主题、账号 8 个页面，无脚本错误、无 HTTP 请求。
-- 本轮新增 Windows / Linux GitHub Actions 源码检查；准确运行状态以交接分支的 Actions 记录为准，实际结果在推送后补充。
+- 本轮 [GitHub Actions 43372778377](https://github.com/poniard-li/Navio/actions/runs/43372778377) 已全部通过，对应源码提交 `095e4d0feeaa5e74d1a4caef1d1c0760869caafa`：Ubuntu 24.04 和 Windows 2025 均完成全新 frozen 依赖安装、格式 / Lint / 类型、单元、打包逻辑及 QA 入口检查、完整源码编译。Linux 另通过 Bash 语法检查；现有本地 `file:` 依赖路径无需为安装而改写锁文件。之后的补充提交仅更新本文的验证记录，不改变已检查源码。
 
 ### 仍未验证
 
@@ -234,6 +234,8 @@ node scripts/release-windows.cjs "<Party 参考包解压目录>" "<不存在的�
 | 生产服务器、DNS、Cloudflare、邮件 / 短信 / OAuth 控制台              | 外部资源，不随 Git 迁移。运行环境配置及权限需所有者在对应平台单独授予；本轮未变更                                                     |
 
 ## 10. 云端接手顺序
+
+其他旧预览、截图、图标生成及调试材料仍保留本机，不整批上传；当前正式图标和主题源文件已在 Git，选定设计参考和主要 QA 工具已单独保留。
 
 1. 从现有仓库选择交接分支，检查 HEAD、remote、Git 状态；阅读本文件和 `AGENTS.md`。不要从旧目录名猜版本，不先切 main 覆盖工作。
 2. 配 Node 24 / pnpm 11.8.0，运行 setup 和源码检查，记录平台和结果。若安装失败先看 frozen lockfile / 平台依赖，不能直接删除锁文件或更新全部包。
