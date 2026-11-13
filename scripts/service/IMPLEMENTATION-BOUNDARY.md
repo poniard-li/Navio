@@ -1,6 +1,6 @@
 # Navio Windows 后台服务：实现边界与下一步
 
-独立 Windows 后台服务尚未实现。当前公测版通过管理员权限启用 TUN；以下内容记录现有架构与服务方案的实施要求。
+历史方案说明：本文最初写于独立后台服务实现前。Public Beta 7 已包含 `src/native/windows-service/NavioService.cs`、`src/main/core/windows-service.ts` 及对应构建、安装与快照校验逻辑。下文保留早期设计依据，不代表当前实现状态；独立 Windows 实机验收仍未完成，详见 [云端交接记录](../../docs/CLOUD_HANDOFF.md)。
 
 ## 为什么不能仅包装成一个 SYSTEM 服务
 
@@ -28,4 +28,4 @@
 - 已有 Clash/Verge/Party 与其他 Windows 用户会话不被接管或终止。
 - 稳定/Alpha/Smart 内核各自的受支持范围、配置刷新、资源更新与 TUN 真实流量。
 
-服务发布前需要完成上述实现及独立 Windows 环境验证。
+上述验收要求仍适用；逐项验证结果应单独记录，不能由源码存在或构建成功推断通过。

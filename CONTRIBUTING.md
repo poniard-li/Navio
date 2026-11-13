@@ -10,6 +10,8 @@
 
 ## 开发环境
 
+跨电脑或云端接手请先读 [云端交接记录](docs/CLOUD_HANDOFF.md)，其中列出了当前基线、未迁移的私有资料和 Windows 验证边界。
+
 需要 Node.js 24+ 和 `package.json` 指定的 pnpm 版本。安装依赖和提交钩子：
 
 ```powershell
